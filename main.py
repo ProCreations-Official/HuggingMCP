@@ -22,11 +22,10 @@ from pathlib import Path
 from io import BytesIO
 
 # MCP server imports
-from mcp.server.fastmcp import FastMCP
-from mcp.server import NotificationOptions, Server
+import mcp.types as types
+from mcp.server import Server
 from mcp.server.models import InitializationOptions
 import mcp.server.stdio
-import mcp.types as types
 
 # HuggingFace imports
 from huggingface_hub import HfApi, list_models, list_datasets, list_spaces
