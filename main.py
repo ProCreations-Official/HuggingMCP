@@ -6,7 +6,7 @@ HuggingMCP - Clean Hugging Face MCP Server
 import os
 import sys
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
