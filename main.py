@@ -729,7 +729,7 @@ if __name__ == "__main__":
     print(f"   Authenticated: {'✅' if TOKEN else '❌'}")
     print(f"   Admin Mode: {'✅' if ADMIN_MODE else '❌'}")
     print(f"   Read Only: {'✅' if READ_ONLY else '❌'}")
-    print("   🚀 Ready with 17 HF tools!")
+    print("   🚀 Ready with 18 HF tools!")
     
     # Run the server
     mcp.run()
