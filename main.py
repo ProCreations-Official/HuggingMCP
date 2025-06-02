@@ -252,7 +252,8 @@ def hf_read_file(
     repo_id: str,
     filename: str,
     repo_type: str = "model",
-    revision: str = "main"
+    revision: str = "main",
+    max_size: int = 500000  # 500KB default limit, 0 = no limit
 ) -> Dict[str, Any]:
     """Read a file from a repository"""
     try:
@@ -264,18 +265,38 @@ def hf_read_file(
             token=TOKEN
         )
         
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        return {
-            "repo_id": repo_id,
-            "filename": filename,
-            "content": content,
-            "size": len(content),
-            "message": f"📖 Successfully read {filename}"
-        }
-    except UnicodeDecodeError:
+        # Check file size first
         file_size = os.path.getsize(file_path)
+        
+        with open(file_path, 'r', encoding='utf-8') as f:
+            if max_size > 0 and file_size > max_size:
+                # Read only the specified amount
+                content = f.read(max_size)
+                return {
+                    "repo_id": repo_id,
+                    "filename": filename,
+                    "content": content,
+                    "size": len(content),
+                    "full_file_size": file_size,
+                    "truncated": True,
+                    "message": f"📖 Read {filename} (truncated to {max_size:,} chars of {file_size:,} total)",
+                    "note": f"File was truncated. Use max_size=0 to read full file or increase max_size parameter."
+                }
+            else:
+                # Read full file
+                content = f.read()
+                return {
+                    "repo_id": repo_id,
+                    "filename": filename,
+                    "content": content,
+                    "size": len(content),
+                    "full_file_size": file_size,
+                    "truncated": False,
+                    "message": f"📖 Successfully read {filename} ({file_size:,} chars)"
+                }
+        
+    except UnicodeDecodeError:
+        file_size = os.path.getsize(file_path) if 'file_path' in locals() else 0
         return {
             "repo_id": repo_id,
             "filename": filename,
