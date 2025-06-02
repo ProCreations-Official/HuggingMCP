@@ -111,13 +111,6 @@ uv add "mcp[cli]" huggingface_hub
 
 Once connected, you can use natural language to interact with Hugging Face:
 
-### 🔐 Authentication
-```
-"Please login to Hugging Face with my token: hf_xxxxxxxxxxxx"
-"Who am I currently logged in as?"
-"What are my current permissions?"
-```
-
 ### 🏗️ Repository Operations
 ```
 "Create a new model repository called 'my-awesome-model' with a custom README"
