@@ -1,768 +1,914 @@
 #!/usr/bin/env python3
 """
-HuggingMCP - Model Context Protocol server for HuggingFace integration
+HuggingMCP - Model Context Protocol Server for Hugging Face Hub
 
-Provides Claude with comprehensive access to HuggingFace functionality including:
-- Creating and managing spaces, models, datasets, and collections
-- Reading and editing files in repositories
-- Searching and exploring HuggingFace content
-- Managing repository settings and permissions
+This MCP server allows Claude to interact with Hugging Face Hub:
+- Create and manage repositories (models, datasets, spaces)
+- Read and write files in repositories
+- Manage collections
+- Search and explore HF content
+- Advanced file editing with precise text replacement
 
-Author: ProCreations-Official
+Author: Built for Claude and AI developers
 License: MIT
 """
 
-import json
 import os
-import sys
-import asyncio
+import json
 import logging
-from typing import Any, Dict, List, Optional, Union
+import asyncio
+from typing import Dict, List, Optional, Any, Union
+from datetime import datetime
 from pathlib import Path
-from io import BytesIO
 
-# MCP server imports
-import mcp.types as types
-from mcp.server import Server
-from mcp.server.models import InitializationOptions
-import mcp.server.stdio
+# MCP Server imports
+from mcp.server.fastmcp import FastMCP
+from mcp.types import TextContent, ImageContent
 
-# HuggingFace imports
-from huggingface_hub import HfApi, list_models, list_datasets, list_spaces
-from huggingface_hub.errors import RepositoryNotFoundError, RevisionNotFoundError
-from huggingface_hub import hf_hub_download, upload_file, create_repo, delete_repo
-from huggingface_hub import login, logout, whoami, create_collection, get_collection
-from huggingface_hub.utils import EntryNotFoundError
+# Hugging Face imports
+from huggingface_hub import (
+    HfApi, 
+    create_repo, 
+    upload_file, 
+    upload_folder,
+    delete_repo,
+    delete_file,
+    list_models,
+    list_datasets,
+    list_spaces,
+    model_info,
+    dataset_info,
+    space_info,
+    hf_hub_download,
+    snapshot_download,
+    login,
+    logout,
+    whoami,
+    create_collection,
+    get_collection,
+    add_collection_item,
+    update_collection_item,
+    delete_collection_item
+)
+from huggingface_hub.utils import HfHubHTTPError, RepositoryNotFoundError
 
-# Set up logging
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize MCP server
-server = Server("HuggingMCP")
+# Initialize FastMCP server
+mcp = FastMCP("HuggingMCP")
 
-# Global HuggingFace API client
-hf_api = None
-
-# Permission levels
-PERMISSION_LEVELS = {
-    "read": ["read", "search", "list", "get", "download"],
-    "write": ["read", "search", "list", "get", "download", "create", "edit", "upload"],
-    "admin": ["read", "search", "list", "get", "download", "create", "edit", "upload", "delete", "manage"]
-}
-
-def check_permission(action: str, allowed_level: str = "admin") -> bool:
-    """Check if an action is allowed based on permission level"""
-    return action in PERMISSION_LEVELS.get(allowed_level, [])
-
-def get_permission_level() -> str:
-    """Get the current permission level from environment variable"""
-    return os.getenv("HF_MCP_PERMISSIONS", "admin").lower()
-
-def init_hf_api():
-    """Initialize HuggingFace API with token"""
-    global hf_api
-    token = os.getenv("HUGGINGFACE_TOKEN")
-    if not token:
-        raise ValueError("HUGGINGFACE_TOKEN environment variable is required")
-    
-    try:
-        hf_api = HfApi(token=token)
-        # Test the token
-        hf_api.whoami()
-        logger.info("HuggingFace API initialized successfully")
-    except Exception as e:
-        raise ValueError(f"Failed to initialize HuggingFace API: {e}")
-
-@server.list_tools()
-async def handle_list_tools() -> list[types.Tool]:
-    """List available tools"""
-    return [
-        types.Tool(
-            name="hf_whoami",
-            description="Get information about the current HuggingFace user",
-            inputSchema={
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
-        ),
-        types.Tool(
-            name="hf_search_models",
-            description="Search for models on HuggingFace Hub",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Search query"},
-                    "author": {"type": "string", "description": "Filter by author"},
-                    "tags": {"type": "string", "description": "Comma-separated tags"},
-                    "limit": {"type": "integer", "description": "Limit results", "default": 20}
-                },
-                "required": []
-            }
-        ),
-        types.Tool(
-            name="hf_search_datasets",
-            description="Search for datasets on HuggingFace Hub",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Search query"},
-                    "author": {"type": "string", "description": "Filter by author"},
-                    "tags": {"type": "string", "description": "Comma-separated tags"},
-                    "limit": {"type": "integer", "description": "Limit results", "default": 20}
-                },
-                "required": []
-            }
-        ),
-        types.Tool(
-            name="hf_search_spaces",
-            description="Search for spaces on HuggingFace Hub",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Search query"},
-                    "author": {"type": "string", "description": "Filter by author"},
-                    "tags": {"type": "string", "description": "Comma-separated tags"},
-                    "limit": {"type": "integer", "description": "Limit results", "default": 20}
-                },
-                "required": []
-            }
-        ),
-        types.Tool(
-            name="hf_get_repo_info",
-            description="Get detailed information about a repository",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "repo_id": {"type": "string", "description": "Repository ID"},
-                    "repo_type": {"type": "string", "description": "Repository type", "default": "model"}
-                },
-                "required": ["repo_id"]
-            }
-        ),
-        types.Tool(
-            name="hf_list_repo_files",
-            description="List files in a repository",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "repo_id": {"type": "string", "description": "Repository ID"},
-                    "repo_type": {"type": "string", "description": "Repository type", "default": "model"},
-                    "path": {"type": "string", "description": "Path filter", "default": ""}
-                },
-                "required": ["repo_id"]
-            }
-        ),
-        types.Tool(
-            name="hf_read_file",
-            description="Read a file from a HuggingFace repository",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "repo_id": {"type": "string", "description": "Repository ID"},
-                    "file_path": {"type": "string", "description": "File path"},
-                    "repo_type": {"type": "string", "description": "Repository type", "default": "model"}
-                },
-                "required": ["repo_id", "file_path"]
-            }
-        ),
-        types.Tool(
-            name="hf_create_repo",
-            description="Create a new repository",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "repo_id": {"type": "string", "description": "Repository ID"},
-                    "repo_type": {"type": "string", "description": "Repository type", "default": "model"},
-                    "private": {"type": "boolean", "description": "Private repository", "default": False},
-                    "license": {"type": "string", "description": "License"},
-                    "space_sdk": {"type": "string", "description": "Space SDK for spaces"}
-                },
-                "required": ["repo_id"]
-            }
-        ),
-        types.Tool(
-            name="hf_upload_file",
-            description="Upload a file to a HuggingFace repository",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "repo_id": {"type": "string", "description": "Repository ID"},
-                    "file_path": {"type": "string", "description": "File path"},
-                    "file_content": {"type": "string", "description": "File content"},
-                    "repo_type": {"type": "string", "description": "Repository type", "default": "model"},
-                    "commit_message": {"type": "string", "description": "Commit message"}
-                },
-                "required": ["repo_id", "file_path", "file_content"]
-            }
-        ),
-        types.Tool(
-            name="hf_edit_file",
-            description="Edit a file by replacing old_text with new_text",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "repo_id": {"type": "string", "description": "Repository ID"},
-                    "file_path": {"type": "string", "description": "File path"},
-                    "old_text": {"type": "string", "description": "Text to replace"},
-                    "new_text": {"type": "string", "description": "New text"},
-                    "repo_type": {"type": "string", "description": "Repository type", "default": "model"},
-                    "commit_message": {"type": "string", "description": "Commit message"}
-                },
-                "required": ["repo_id", "file_path", "old_text", "new_text"]
-            }
-        )
-    ]
-
-@server.call_tool()
-async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent]:
-    """Handle tool calls"""
-    try:
-        if name == "hf_whoami":
-            result = await hf_whoami()
-        elif name == "hf_search_models":
-            result = await hf_search_models(**arguments)
-        elif name == "hf_search_datasets":
-            result = await hf_search_datasets(**arguments)
-        elif name == "hf_search_spaces":
-            result = await hf_search_spaces(**arguments)
-        elif name == "hf_get_repo_info":
-            result = await hf_get_repo_info(**arguments)
-        elif name == "hf_list_repo_files":
-            result = await hf_list_repo_files(**arguments)
-        elif name == "hf_read_file":
-            result = await hf_read_file(**arguments)
-        elif name == "hf_create_repo":
-            result = await hf_create_repo(**arguments)
-        elif name == "hf_upload_file":
-            result = await hf_upload_file(**arguments)
-        elif name == "hf_edit_file":
-            result = await hf_edit_file(**arguments)
-        else:
-            result = f"Unknown tool: {name}"
+# Global configuration
+class HuggingMCPConfig:
+    def __init__(self):
+        self.token = os.getenv("HF_TOKEN")
+        self.read_only = os.getenv("HF_READ_ONLY", "false").lower() == "true"
+        self.write_only = os.getenv("HF_WRITE_ONLY", "false").lower() == "true"
+        self.admin_mode = os.getenv("HF_ADMIN_MODE", "false").lower() == "true"
+        self.max_file_size = int(os.getenv("HF_MAX_FILE_SIZE", "50000000"))  # 50MB default
         
-        return [types.TextContent(type="text", text=str(result))]
-    except Exception as e:
-        return [types.TextContent(type="text", text=f"Error: {str(e)}")]
-
-async def hf_whoami() -> str:
-    """Get information about the current HuggingFace user"""
-    if not check_permission("read", get_permission_level()):
-        return "Permission denied: read access required"
-    
-    try:
-        user_info = hf_api.whoami()
-        return json.dumps(user_info, indent=2)
-    except Exception as e:
-        return f"Error getting user info: {e}"
-
-async def hf_search_models(
-    query: str = "",
-    author: Optional[str] = None,
-    tags: Optional[str] = None,
-    limit: int = 20
-) -> str:
-    """Search for models on HuggingFace Hub"""
-    if not check_permission("search", get_permission_level()):
-        return "Permission denied: search access required"
-    
-    try:
-        models = list_models(
-            search=query,
-            author=author,
-            tags=tags.split(",") if tags else None,
-            limit=limit
-        )
+        # Initialize HF API
+        self.api = HfApi(token=self.token) if self.token else HfApi()
         
-        results = []
-        for model in models:
-            results.append({
-                "id": model.id,
-                "author": getattr(model, 'author', None),
-                "downloads": getattr(model, 'downloads', 0),
-                "likes": getattr(model, 'likes', 0),
-                "tags": getattr(model, 'tags', []),
-                "created_at": str(getattr(model, 'created_at', '')),
-                "last_modified": str(getattr(model, 'last_modified', ''))
-            })
-        
-        return json.dumps(results, indent=2)
-    except Exception as e:
-        return f"Error searching models: {e}"
+        # Validate permissions
+        if self.read_only and self.write_only:
+            raise ValueError("Cannot set both HF_READ_ONLY and HF_WRITE_ONLY to true")
+
+config = HuggingMCPConfig()
+
+def permission_check(operation: str) -> bool:
+    """Check if operation is allowed based on current permissions"""
+    if operation == "read":
+        return not config.write_only
+    elif operation == "write":
+        return not config.read_only
+    elif operation == "admin":
+        return config.admin_mode
+    return True
+
+def handle_hf_error(func):
+    """Decorator to handle Hugging Face API errors gracefully"""
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except HfHubHTTPError as e:
+            logger.error(f"HF API Error: {e}")
+            return {"error": f"Hugging Face API Error: {str(e)}"}
+        except RepositoryNotFoundError as e:
+            logger.error(f"Repository not found: {e}")
+            return {"error": f"Repository not found: {str(e)}"}
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}")
+            return {"error": f"Unexpected error: {str(e)}"}
+    return wrapper
+
+# =============================================================================
+# AUTHENTICATION & USER MANAGEMENT
+# =============================================================================
 
 @mcp.tool()
-async def hf_search_datasets(
-    query: str = "",
-    author: Optional[str] = None,
-    tags: Optional[str] = None,
-    limit: int = 20
-) -> str:
-    """Search for datasets on HuggingFace Hub"""
-    if not check_permission("search", get_permission_level()):
-        return "Permission denied: search access required"
+@handle_hf_error
+def hf_login(token: str) -> Dict[str, Any]:
+    """
+    Login to Hugging Face with a token
     
+    Args:
+        token: Your Hugging Face access token
+        
+    Returns:
+        Login status and user information
+    """
     try:
-        datasets = list_datasets(
-            search=query,
-            author=author,
-            tags=tags.split(",") if tags else None,
-            limit=limit
-        )
-        
-        results = []
-        for dataset in datasets:
-            results.append({
-                "id": dataset.id,
-                "author": getattr(dataset, 'author', None),
-                "downloads": getattr(dataset, 'downloads', 0),
-                "likes": getattr(dataset, 'likes', 0),
-                "tags": getattr(dataset, 'tags', []),
-                "created_at": str(getattr(dataset, 'created_at', '')),
-                "last_modified": str(getattr(dataset, 'last_modified', ''))
-            })
-        
-        return json.dumps(results, indent=2)
-    except Exception as e:
-        return f"Error searching datasets: {e}"
-
-@mcp.tool()
-async def hf_search_spaces(
-    query: str = "",
-    author: Optional[str] = None,
-    tags: Optional[str] = None,
-    limit: int = 20
-) -> str:
-    """Search for spaces on HuggingFace Hub"""
-    if not check_permission("search", get_permission_level()):
-        return "Permission denied: search access required"
-    
-    try:
-        spaces = list_spaces(
-            search=query,
-            author=author,
-            tags=tags.split(",") if tags else None,
-            limit=limit
-        )
-        
-        results = []
-        for space in spaces:
-            results.append({
-                "id": space.id,
-                "author": getattr(space, 'author', None),
-                "likes": getattr(space, 'likes', 0),
-                "tags": getattr(space, 'tags', []),
-                "sdk": getattr(space, 'sdk', None),
-                "created_at": str(getattr(space, 'created_at', '')),
-                "last_modified": str(getattr(space, 'last_modified', ''))
-            })
-        
-        return json.dumps(results, indent=2)
-    except Exception as e:
-        return f"Error searching spaces: {e}"
-
-@mcp.tool()
-async def hf_get_repo_info(repo_id: str, repo_type: str = "model") -> str:
-    """Get detailed information about a repository (model, dataset, or space)"""
-    if not check_permission("read", get_permission_level()):
-        return "Permission denied: read access required"
-    
-    try:
-        info = hf_api.repo_info(repo_id=repo_id, repo_type=repo_type)
-        
-        result = {
-            "id": info.id,
-            "author": getattr(info, 'author', None),
-            "sha": info.sha,
-            "created_at": str(info.created_at),
-            "last_modified": str(info.last_modified),
-            "private": getattr(info, 'private', False),
-            "downloads": getattr(info, 'downloads', 0),
-            "likes": getattr(info, 'likes', 0),
-            "tags": getattr(info, 'tags', []),
-            "siblings": [{"rfilename": s.rfilename, "size": s.size} for s in info.siblings[:50]]  # Limit for readability
+        login(token=token)
+        user_info = whoami(token=token)
+        config.token = token
+        config.api = HfApi(token=token)
+        return {
+            "status": "success",
+            "message": "Successfully logged in to Hugging Face",
+            "user": user_info
         }
-        
-        return json.dumps(result, indent=2)
     except Exception as e:
-        return f"Error getting repo info: {e}"
+        return {"error": f"Login failed: {str(e)}"}
 
 @mcp.tool()
-async def hf_list_repo_files(repo_id: str, repo_type: str = "model", path: str = "") -> str:
-    """List files in a repository"""
-    if not check_permission("read", get_permission_level()):
-        return "Permission denied: read access required"
+@handle_hf_error
+def hf_whoami() -> Dict[str, Any]:
+    """
+    Get current user information
     
-    try:
-        files = hf_api.list_repo_files(repo_id=repo_id, repo_type=repo_type, revision="main")
-        
-        # Filter by path if specified
-        if path:
-            files = [f for f in files if f.startswith(path)]
-        
-        return json.dumps(files, indent=2)
-    except Exception as e:
-        return f"Error listing repo files: {e}"
-
-@mcp.tool()
-async def hf_read_file(repo_id: str, file_path: str, repo_type: str = "model") -> str:
-    """Read a file from a HuggingFace repository"""
-    if not check_permission("read", get_permission_level()):
-        return "Permission denied: read access required"
+    Returns:
+        Current user details
+    """
+    if not config.token:
+        return {"error": "Not logged in. Please use hf_login first."}
     
-    try:
-        # Download file content
-        file_content = hf_hub_download(
-            repo_id=repo_id,
-            filename=file_path,
-            repo_type=repo_type
-        )
-        
-        # Read the content
-        with open(file_content, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        return content
-    except Exception as e:
-        return f"Error reading file: {e}"
+    user_info = whoami(token=config.token)
+    return {"user": user_info}
 
 @mcp.tool()
-async def hf_create_repo(
+@handle_hf_error
+def hf_logout() -> Dict[str, str]:
+    """
+    Logout from Hugging Face
+    
+    Returns:
+        Logout status
+    """
+    logout()
+    config.token = None
+    config.api = HfApi()
+    return {"status": "success", "message": "Successfully logged out"}
+
+# =============================================================================
+# REPOSITORY MANAGEMENT
+# =============================================================================
+
+@mcp.tool()
+@handle_hf_error
+def create_repository(
     repo_id: str,
     repo_type: str = "model",
     private: bool = False,
+    description: Optional[str] = None,
     license: Optional[str] = None,
-    space_sdk: Optional[str] = None
-) -> str:
-    """Create a new repository (model, dataset, or space)"""
-    if not check_permission("create", get_permission_level()):
-        return "Permission denied: create access required"
+    readme_content: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Create a new repository on Hugging Face Hub
     
-    try:
-        kwargs = {
-            "repo_id": repo_id,
-            "repo_type": repo_type,
-            "private": private
-        }
+    Args:
+        repo_id: Repository ID (username/repo-name)
+        repo_type: Type of repository ("model", "dataset", "space")
+        private: Whether the repository should be private
+        description: Repository description
+        license: Repository license
+        readme_content: Custom README content
         
-        if license:
-            kwargs["license"] = license
-        
-        if repo_type == "space" and space_sdk:
-            kwargs["space_sdk"] = space_sdk
-        
-        url = create_repo(**kwargs)
-        return f"Repository created successfully: {url}"
-    except Exception as e:
-        return f"Error creating repository: {e}"
-
-@mcp.tool()
-async def hf_upload_file(
-    repo_id: str,
-    file_path: str,
-    file_content: str,
-    repo_type: str = "model",
-    commit_message: Optional[str] = None
-) -> str:
-    """Upload a file to a HuggingFace repository"""
-    if not check_permission("upload", get_permission_level()):
-        return "Permission denied: upload access required"
+    Returns:
+        Repository creation details
+    """
+    if not permission_check("write"):
+        return {"error": "Write operations not permitted"}
     
-    try:
-        # Create a temporary file with the content
-        temp_file = BytesIO(file_content.encode('utf-8'))
-        
-        result = upload_file(
-            path_or_fileobj=temp_file,
-            path_in_repo=file_path,
+    if not config.token:
+        return {"error": "Authentication required. Please login first."}
+    
+    repo_url = create_repo(
+        repo_id=repo_id,
+        repo_type=repo_type,
+        private=private,
+        token=config.token
+    )
+    
+    result = {
+        "status": "success",
+        "repo_url": repo_url,
+        "repo_id": repo_id,
+        "repo_type": repo_type,
+        "private": private
+    }
+    
+    # Add README if provided
+    if readme_content:
+        upload_result = upload_file(
+            path_or_fileobj=readme_content.encode(),
+            path_in_repo="README.md",
             repo_id=repo_id,
             repo_type=repo_type,
-            commit_message=commit_message or f"Upload {file_path}"
+            token=config.token,
+            commit_message="Initial README"
         )
-        
-        return f"File uploaded successfully: {result}"
-    except Exception as e:
-        return f"Error uploading file: {e}"
+        result["readme_uploaded"] = True
+    
+    return result
 
 @mcp.tool()
-async def hf_edit_file(
+@handle_hf_error
+def delete_repository(repo_id: str, repo_type: str = "model") -> Dict[str, Any]:
+    """
+    Delete a repository (DANGEROUS - USE WITH CAUTION!)
+    
+    Args:
+        repo_id: Repository ID to delete
+        repo_type: Type of repository ("model", "dataset", "space")
+        
+    Returns:
+        Deletion status
+    """
+    if not permission_check("admin"):
+        return {"error": "Admin permissions required for repository deletion"}
+    
+    if not config.token:
+        return {"error": "Authentication required"}
+    
+    delete_repo(repo_id=repo_id, repo_type=repo_type, token=config.token)
+    return {
+        "status": "success",
+        "message": f"Repository {repo_id} deleted successfully",
+        "repo_id": repo_id,
+        "repo_type": repo_type
+    }
+
+@mcp.tool()
+@handle_hf_error
+def get_repository_info(repo_id: str, repo_type: str = "model") -> Dict[str, Any]:
+    """
+    Get detailed information about a repository
+    
+    Args:
+        repo_id: Repository ID
+        repo_type: Type of repository ("model", "dataset", "space")
+        
+    Returns:
+        Repository information and metadata
+    """
+    if not permission_check("read"):
+        return {"error": "Read operations not permitted"}
+    
+    if repo_type == "model":
+        info = model_info(repo_id, token=config.token)
+    elif repo_type == "dataset":
+        info = dataset_info(repo_id, token=config.token)
+    elif repo_type == "space":
+        info = space_info(repo_id, token=config.token)
+    else:
+        return {"error": f"Unknown repo_type: {repo_type}"}
+    
+    return {
+        "repo_id": info.id,
+        "author": info.author,
+        "sha": info.sha,
+        "created_at": info.created_at.isoformat() if info.created_at else None,
+        "last_modified": info.last_modified.isoformat() if info.last_modified else None,
+        "private": info.private,
+        "downloads": getattr(info, 'downloads', 0),
+        "likes": getattr(info, 'likes', 0),
+        "tags": getattr(info, 'tags', []),
+        "siblings": [{"filename": s.rfilename, "size": s.size} for s in info.siblings] if hasattr(info, 'siblings') else []
+    }
+
+@mcp.tool()
+@handle_hf_error
+def list_repository_files(repo_id: str, repo_type: str = "model", path: str = "") -> Dict[str, Any]:
+    """
+    List files in a repository
+    
+    Args:
+        repo_id: Repository ID
+        repo_type: Type of repository
+        path: Path within the repository
+        
+    Returns:
+        List of files and directories
+    """
+    if not permission_check("read"):
+        return {"error": "Read operations not permitted"}
+    
+    files = config.api.list_repo_files(
+        repo_id=repo_id,
+        repo_type=repo_type,
+        token=config.token
+    )
+    
+    if path:
+        files = [f for f in files if f.startswith(path)]
+    
+    return {
+        "repo_id": repo_id,
+        "path": path,
+        "files": files
+    }
+
+# =============================================================================
+# FILE OPERATIONS
+# =============================================================================
+
+@mcp.tool()
+@handle_hf_error
+def read_file(
+    repo_id: str, 
+    filename: str, 
+    repo_type: str = "model",
+    revision: str = "main"
+) -> Dict[str, Any]:
+    """
+    Read a file from a Hugging Face repository
+    
+    Args:
+        repo_id: Repository ID
+        filename: Path to file in repository
+        repo_type: Type of repository
+        revision: Git revision/branch
+        
+    Returns:
+        File content and metadata
+    """
+    if not permission_check("read"):
+        return {"error": "Read operations not permitted"}
+    
+    try:
+        file_path = hf_hub_download(
+            repo_id=repo_id,
+            filename=filename,
+            repo_type=repo_type,
+            revision=revision,
+            token=config.token
+        )
+        
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        file_size = os.path.getsize(file_path)
+        
+        return {
+            "repo_id": repo_id,
+            "filename": filename,
+            "content": content,
+            "size": file_size,
+            "revision": revision
+        }
+    except UnicodeDecodeError:
+        # Try reading as binary for non-text files
+        with open(file_path, 'rb') as f:
+            content = f.read()
+        
+        return {
+            "repo_id": repo_id,
+            "filename": filename,
+            "content": f"<Binary file: {len(content)} bytes>",
+            "size": len(content),
+            "revision": revision,
+            "is_binary": True
+        }
+
+@mcp.tool()
+@handle_hf_error
+def write_file(
     repo_id: str,
-    file_path: str,
+    filename: str,
+    content: str,
+    repo_type: str = "model",
+    commit_message: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Write/upload a file to a Hugging Face repository
+    
+    Args:
+        repo_id: Repository ID
+        filename: Path where to save the file
+        content: File content to write
+        repo_type: Type of repository
+        commit_message: Commit message
+        
+    Returns:
+        Upload status and details
+    """
+    if not permission_check("write"):
+        return {"error": "Write operations not permitted"}
+    
+    if not config.token:
+        return {"error": "Authentication required"}
+    
+    if len(content.encode()) > config.max_file_size:
+        return {"error": f"File too large. Maximum size: {config.max_file_size} bytes"}
+    
+    if not commit_message:
+        commit_message = f"Update {filename}"
+    
+    commit_url = upload_file(
+        path_or_fileobj=content.encode(),
+        path_in_repo=filename,
+        repo_id=repo_id,
+        repo_type=repo_type,
+        token=config.token,
+        commit_message=commit_message
+    )
+    
+    return {
+        "status": "success",
+        "repo_id": repo_id,
+        "filename": filename,
+        "commit_url": commit_url,
+        "commit_message": commit_message,
+        "size": len(content.encode())
+    }
+
+@mcp.tool()
+@handle_hf_error
+def edit_file(
+    repo_id: str,
+    filename: str,
     old_text: str,
     new_text: str,
     repo_type: str = "model",
     commit_message: Optional[str] = None
-) -> str:
-    """Edit a file in a HuggingFace repository by replacing old_text with new_text"""
-    if not check_permission("edit", get_permission_level()):
-        return "Permission denied: edit access required"
+) -> Dict[str, Any]:
+    """
+    Edit a file by replacing specific text content (PRECISE EDITING)
     
-    try:
-        # First, read the current file content
-        current_content = await hf_read_file(repo_id, file_path, repo_type)
-        if current_content.startswith("Error"):
-            return current_content
+    Args:
+        repo_id: Repository ID
+        filename: Path to file to edit
+        old_text: Exact text to find and replace (must match exactly)
+        new_text: Text to replace it with
+        repo_type: Type of repository
+        commit_message: Commit message
         
-        # Replace the old text with new text
-        if old_text not in current_content:
-            return f"Error: old_text not found in file. Current content length: {len(current_content)} chars"
-        
-        new_content = current_content.replace(old_text, new_text)
-        
-        # Upload the modified content
-        result = await hf_upload_file(
-            repo_id=repo_id,
-            file_path=file_path,
-            file_content=new_content,
-            repo_type=repo_type,
-            commit_message=commit_message or f"Edit {file_path}"
-        )
-        
-        return result
-    except Exception as e:
-        return f"Error editing file: {e}"
+    Returns:
+        Edit status and details
+    """
+    if not permission_check("write"):
+        return {"error": "Write operations not permitted"}
+    
+    if not config.token:
+        return {"error": "Authentication required"}
+    
+    # First, read the current file content
+    read_result = read_file(repo_id, filename, repo_type)
+    if "error" in read_result:
+        return read_result
+    
+    current_content = read_result["content"]
+    
+    # Check if old_text exists in the file
+    if old_text not in current_content:
+        return {
+            "error": f"Text not found in file. Could not locate: {old_text[:100]}{'...' if len(old_text) > 100 else ''}"
+        }
+    
+    # Perform the replacement
+    new_content = current_content.replace(old_text, new_text, 1)  # Replace only first occurrence
+    
+    if not commit_message:
+        commit_message = f"Edit {filename}: Replace text"
+    
+    # Write the updated content
+    write_result = write_file(repo_id, filename, new_content, repo_type, commit_message)
+    
+    if "error" in write_result:
+        return write_result
+    
+    return {
+        "status": "success",
+        "repo_id": repo_id,
+        "filename": filename,
+        "old_text_length": len(old_text),
+        "new_text_length": len(new_text),
+        "total_size": len(new_content.encode()),
+        "commit_url": write_result["commit_url"],
+        "commit_message": commit_message
+    }
 
 @mcp.tool()
-async def hf_delete_file(
+@handle_hf_error
+def delete_file_from_repo(
     repo_id: str,
-    file_path: str,
+    filename: str,
     repo_type: str = "model",
     commit_message: Optional[str] = None
-) -> str:
-    """Delete a file from a HuggingFace repository"""
-    if not check_permission("delete", get_permission_level()):
-        return "Permission denied: delete access required"
+) -> Dict[str, Any]:
+    """
+    Delete a file from a repository
     
-    try:
-        hf_api.delete_file(
-            path_in_repo=file_path,
-            repo_id=repo_id,
-            repo_type=repo_type,
-            commit_message=commit_message or f"Delete {file_path}"
-        )
-        return f"File {file_path} deleted successfully"
-    except Exception as e:
-        return f"Error deleting file: {e}"
+    Args:
+        repo_id: Repository ID
+        filename: Path to file to delete
+        repo_type: Type of repository
+        commit_message: Commit message
+        
+    Returns:
+        Deletion status
+    """
+    if not permission_check("write"):
+        return {"error": "Write operations not permitted"}
+    
+    if not config.token:
+        return {"error": "Authentication required"}
+    
+    if not commit_message:
+        commit_message = f"Delete {filename}"
+    
+    delete_file(
+        path_in_repo=filename,
+        repo_id=repo_id,
+        repo_type=repo_type,
+        token=config.token,
+        commit_message=commit_message
+    )
+    
+    return {
+        "status": "success",
+        "repo_id": repo_id,
+        "filename": filename,
+        "commit_message": commit_message
+    }
+
+# =============================================================================
+# SEARCH & DISCOVERY
+# =============================================================================
 
 @mcp.tool()
-async def hf_create_collection(
+@handle_hf_error
+def search_models(
+    query: Optional[str] = None,
+    author: Optional[str] = None,
+    filter_tag: Optional[str] = None,
+    sort: str = "downloads",
+    direction: int = -1,
+    limit: int = 20
+) -> Dict[str, Any]:
+    """
+    Search for models on Hugging Face Hub
+    
+    Args:
+        query: Search query
+        author: Filter by author
+        filter_tag: Filter by tag (e.g., "pytorch", "text-classification")
+        sort: Sort by ("downloads", "created_at", "last_modified")
+        direction: Sort direction (-1 for desc, 1 for asc)
+        limit: Maximum results
+        
+    Returns:
+        List of matching models
+    """
+    if not permission_check("read"):
+        return {"error": "Read operations not permitted"}
+    
+    models = list_models(
+        search=query,
+        author=author,
+        filter=filter_tag,
+        sort=sort,
+        direction=direction,
+        limit=limit,
+        token=config.token
+    )
+    
+    results = []
+    for model in models:
+        results.append({
+            "id": model.id,
+            "author": model.author,
+            "downloads": model.downloads,
+            "likes": model.likes,
+            "created_at": model.created_at.isoformat() if model.created_at else None,
+            "last_modified": model.last_modified.isoformat() if model.last_modified else None,
+            "tags": model.tags,
+            "private": model.private
+        })
+    
+    return {
+        "query": query,
+        "total_results": len(results),
+        "models": results
+    }
+
+@mcp.tool()
+@handle_hf_error
+def search_datasets(
+    query: Optional[str] = None,
+    author: Optional[str] = None,
+    filter_tag: Optional[str] = None,
+    sort: str = "downloads",
+    direction: int = -1,
+    limit: int = 20
+) -> Dict[str, Any]:
+    """
+    Search for datasets on Hugging Face Hub
+    
+    Args:
+        query: Search query
+        author: Filter by author
+        filter_tag: Filter by tag
+        sort: Sort by ("downloads", "created_at", "last_modified")
+        direction: Sort direction
+        limit: Maximum results
+        
+    Returns:
+        List of matching datasets
+    """
+    if not permission_check("read"):
+        return {"error": "Read operations not permitted"}
+    
+    datasets = list_datasets(
+        search=query,
+        author=author,
+        filter=filter_tag,
+        sort=sort,
+        direction=direction,
+        limit=limit,
+        token=config.token
+    )
+    
+    results = []
+    for dataset in datasets:
+        results.append({
+            "id": dataset.id,
+            "author": dataset.author,
+            "downloads": dataset.downloads,
+            "likes": dataset.likes,
+            "created_at": dataset.created_at.isoformat() if dataset.created_at else None,
+            "last_modified": dataset.last_modified.isoformat() if dataset.last_modified else None,
+            "tags": dataset.tags,
+            "private": dataset.private
+        })
+    
+    return {
+        "query": query,
+        "total_results": len(results),
+        "datasets": results
+    }
+
+@mcp.tool()
+@handle_hf_error
+def search_spaces(
+    query: Optional[str] = None,
+    author: Optional[str] = None,
+    filter_tag: Optional[str] = None,
+    sort: str = "created_at",
+    direction: int = -1,
+    limit: int = 20
+) -> Dict[str, Any]:
+    """
+    Search for Spaces on Hugging Face Hub
+    
+    Args:
+        query: Search query
+        author: Filter by author
+        filter_tag: Filter by tag
+        sort: Sort by
+        direction: Sort direction
+        limit: Maximum results
+        
+    Returns:
+        List of matching Spaces
+    """
+    if not permission_check("read"):
+        return {"error": "Read operations not permitted"}
+    
+    spaces = list_spaces(
+        search=query,
+        author=author,
+        filter=filter_tag,
+        sort=sort,
+        direction=direction,
+        limit=limit,
+        token=config.token
+    )
+    
+    results = []
+    for space in spaces:
+        results.append({
+            "id": space.id,
+            "author": space.author,
+            "likes": space.likes,
+            "created_at": space.created_at.isoformat() if space.created_at else None,
+            "last_modified": space.last_modified.isoformat() if space.last_modified else None,
+            "tags": space.tags,
+            "private": space.private,
+            "sdk": getattr(space, 'sdk', None),
+            "runtime": getattr(space, 'runtime', None)
+        })
+    
+    return {
+        "query": query,
+        "total_results": len(results),
+        "spaces": results
+    }
+
+# =============================================================================
+# COLLECTIONS MANAGEMENT
+# =============================================================================
+
+@mcp.tool()
+@handle_hf_error
+def create_hf_collection(
     title: str,
     namespace: str,
     description: Optional[str] = None,
     private: bool = False
-) -> str:
-    """Create a new collection"""
-    if not check_permission("create", get_permission_level()):
-        return "Permission denied: create access required"
+) -> Dict[str, Any]:
+    """
+    Create a new collection
     
-    try:
-        collection = create_collection(
-            title=title,
-            namespace=namespace,
-            description=description,
-            private=private
-        )
-        return f"Collection created successfully: {collection.slug}"
-    except Exception as e:
-        return f"Error creating collection: {e}"
+    Args:
+        title: Collection title
+        namespace: Namespace (username or org)
+        description: Collection description
+        private: Whether collection is private
+        
+    Returns:
+        Collection creation details
+    """
+    if not permission_check("write"):
+        return {"error": "Write operations not permitted"}
+    
+    if not config.token:
+        return {"error": "Authentication required"}
+    
+    collection = create_collection(
+        title=title,
+        namespace=namespace,
+        description=description,
+        private=private,
+        token=config.token
+    )
+    
+    return {
+        "status": "success",
+        "collection_slug": collection.slug,
+        "title": collection.title,
+        "namespace": collection.namespace,
+        "url": f"https://huggingface.co/collections/{namespace}/{collection.slug}"
+    }
 
 @mcp.tool()
-async def hf_get_collection(collection_slug: str) -> str:
-    """Get information about a collection"""
-    if not check_permission("read", get_permission_level()):
-        return "Permission denied: read access required"
-    
-    try:
-        collection = get_collection(collection_slug)
-        
-        result = {
-            "slug": collection.slug,
-            "title": collection.title,
-            "description": collection.description,
-            "private": collection.private,
-            "author": collection.author,
-            "items": [
-                {
-                    "item_object_id": item.item_object_id,
-                    "item_id": item.item_id,
-                    "item_type": item.item_type,
-                    "position": item.position,
-                    "note": item.note
-                }
-                for item in collection.items[:20]  # Limit for readability
-            ]
-        }
-        
-        return json.dumps(result, indent=2)
-    except Exception as e:
-        return f"Error getting collection: {e}"
-
-@mcp.tool()
-async def hf_add_to_collection(
+@handle_hf_error
+def add_to_collection(
     collection_slug: str,
     item_id: str,
     item_type: str,
     note: Optional[str] = None
-) -> str:
-    """Add an item to a collection"""
-    if not check_permission("edit", get_permission_level()):
-        return "Permission denied: edit access required"
+) -> Dict[str, Any]:
+    """
+    Add an item to a collection
     
-    try:
-        hf_api.add_collection_item(
-            collection_slug=collection_slug,
-            item_id=item_id,
-            item_type=item_type,
-            note=note
-        )
-        return f"Item {item_id} added to collection {collection_slug}"
-    except Exception as e:
-        return f"Error adding to collection: {e}"
+    Args:
+        collection_slug: Collection slug (namespace/slug)
+        item_id: Repository ID to add
+        item_type: Type of item ("model", "dataset", "space", "paper")
+        note: Optional note about the item
+        
+    Returns:
+        Addition status
+    """
+    if not permission_check("write"):
+        return {"error": "Write operations not permitted"}
+    
+    if not config.token:
+        return {"error": "Authentication required"}
+    
+    add_collection_item(
+        collection_slug=collection_slug,
+        item_id=item_id,
+        item_type=item_type,
+        note=note,
+        token=config.token
+    )
+    
+    return {
+        "status": "success",
+        "collection_slug": collection_slug,
+        "item_id": item_id,
+        "item_type": item_type,
+        "note": note
+    }
 
 @mcp.tool()
-async def hf_update_repo_settings(
-    repo_id: str,
-    repo_type: str = "model",
-    private: Optional[bool] = None,
-    description: Optional[str] = None
-) -> str:
-    """Update repository settings"""
-    if not check_permission("manage", get_permission_level()):
-        return "Permission denied: manage access required"
+@handle_hf_error
+def get_collection_info(collection_slug: str) -> Dict[str, Any]:
+    """
+    Get information about a collection
     
-    try:
-        kwargs = {"repo_id": repo_id, "repo_type": repo_type}
-        if private is not None:
-            kwargs["private"] = private
-        if description is not None:
-            kwargs["description"] = description
+    Args:
+        collection_slug: Collection slug (namespace/slug)
         
-        hf_api.update_repo_settings(**kwargs)
-        return f"Repository settings updated successfully"
-    except Exception as e:
-        return f"Error updating repo settings: {e}"
+    Returns:
+        Collection details and items
+    """
+    if not permission_check("read"):
+        return {"error": "Read operations not permitted"}
+    
+    collection = get_collection(collection_slug, token=config.token)
+    
+    items = []
+    for item in collection.items:
+        items.append({
+            "item_object_id": item.item_object_id,
+            "item_id": item.item_id,
+            "item_type": item.item_type,
+            "position": item.position,
+            "note": getattr(item, 'note', None)
+        })
+    
+    return {
+        "slug": collection.slug,
+        "title": collection.title,
+        "description": collection.description,
+        "owner": collection.owner,
+        "items": items,
+        "item_count": len(items),
+        "url": collection.url
+    }
+
+# =============================================================================
+# CONFIGURATION & UTILITIES
+# =============================================================================
 
 @mcp.tool()
-async def hf_delete_repo(repo_id: str, repo_type: str = "model") -> str:
-    """Delete a repository (DANGEROUS!)"""
-    if not check_permission("delete", get_permission_level()):
-        return "Permission denied: delete access required"
+def get_hf_config() -> Dict[str, Any]:
+    """
+    Get current HuggingMCP configuration
     
-    try:
-        delete_repo(repo_id=repo_id, repo_type=repo_type)
-        return f"Repository {repo_id} deleted successfully"
-    except Exception as e:
-        return f"Error deleting repository: {e}"
-
-@mcp.tool()
-async def hf_create_space(
-    repo_id: str,
-    sdk: str = "gradio",
-    private: bool = False,
-    hardware: Optional[str] = None
-) -> str:
-    """Create a new HuggingFace Space"""
-    if not check_permission("create", get_permission_level()):
-        return "Permission denied: create access required"
-    
-    try:
-        url = create_repo(
-            repo_id=repo_id,
-            repo_type="space",
-            private=private,
-            space_sdk=sdk
-        )
-        
-        # Set hardware if specified
-        if hardware:
-            try:
-                hf_api.request_space_hardware(repo_id=repo_id, hardware=hardware)
-            except Exception as hw_error:
-                logger.warning(f"Could not set hardware: {hw_error}")
-        
-        return f"Space created successfully: {url}"
-    except Exception as e:
-        return f"Error creating space: {e}"
-
-@mcp.tool()
-async def hf_list_user_repos(repo_type: str = "model", limit: int = 50) -> str:
-    """List repositories owned by the current user"""
-    if not check_permission("read", get_permission_level()):
-        return "Permission denied: read access required"
-    
-    try:
-        user_info = hf_api.whoami()
-        username = user_info["name"]
-        
-        if repo_type == "model":
-            repos = list_models(author=username, limit=limit)
-        elif repo_type == "dataset":
-            repos = list_datasets(author=username, limit=limit)
-        elif repo_type == "space":
-            repos = list_spaces(author=username, limit=limit)
-        else:
-            return "Error: repo_type must be 'model', 'dataset', or 'space'"
-        
-        results = []
-        for repo in repos:
-            results.append({
-                "id": repo.id,
-                "downloads": getattr(repo, 'downloads', 0),
-                "likes": getattr(repo, 'likes', 0),
-                "tags": getattr(repo, 'tags', []),
-                "last_modified": str(getattr(repo, 'last_modified', ''))
-            })
-        
-        return json.dumps(results, indent=2)
-    except Exception as e:
-        return f"Error listing user repos: {e}"
-
-@mcp.tool()
-async def hf_get_download_stats(repo_id: str, repo_type: str = "model") -> str:
-    """Get download statistics for a repository"""
-    if not check_permission("read", get_permission_level()):
-        return "Permission denied: read access required"
-    
-    try:
-        info = hf_api.repo_info(repo_id=repo_id, repo_type=repo_type)
-        
-        stats = {
-            "repo_id": repo_id,
-            "repo_type": repo_type,
-            "downloads": getattr(info, 'downloads', 0),
-            "likes": getattr(info, 'likes', 0),
-            "created_at": str(info.created_at),
-            "last_modified": str(info.last_modified)
+    Returns:
+        Current configuration settings
+    """
+    return {
+        "authenticated": bool(config.token),
+        "read_only": config.read_only,
+        "write_only": config.write_only,
+        "admin_mode": config.admin_mode,
+        "max_file_size": config.max_file_size,
+        "permissions": {
+            "read": permission_check("read"),
+            "write": permission_check("write"),
+            "admin": permission_check("admin")
         }
-        
-        return json.dumps(stats, indent=2)
-    except Exception as e:
-        return f"Error getting download stats: {e}"
+    }
 
-async def main():
-    """Main function to run the MCP server"""
-    # Initialize HuggingFace API
-    try:
-        init_hf_api()
-    except ValueError as e:
-        logger.error(f"Failed to initialize: {e}")
-        sys.exit(1)
+@mcp.tool()
+def set_hf_permissions(
+    read_only: Optional[bool] = None,
+    write_only: Optional[bool] = None,
+    admin_mode: Optional[bool] = None
+) -> Dict[str, Any]:
+    """
+    Update HuggingMCP permissions
     
-    # Get permission level
-    perm_level = get_permission_level()
-    logger.info(f"Starting HuggingMCP server with permission level: {perm_level}")
+    Args:
+        read_only: Enable read-only mode
+        write_only: Enable write-only mode  
+        admin_mode: Enable admin mode
+        
+    Returns:
+        Updated configuration
+    """
+    if read_only is not None:
+        config.read_only = read_only
+    if write_only is not None:
+        config.write_only = write_only
+    if admin_mode is not None:
+        config.admin_mode = admin_mode
     
-    # Run the MCP server
-    async with mcp.run_server() as (read_stream, write_stream):
-        await Server(mcp).run(
-            read_stream,
-            write_stream,
-            InitializationOptions(
-                server_name="HuggingMCP",
-                server_version="1.0.0",
-                capabilities=mcp.get_capabilities()
-            )
-        )
+    if config.read_only and config.write_only:
+        config.write_only = False  # Prioritize read_only
+    
+    return get_hf_config()
+
+# =============================================================================
+# MAIN SERVER ENTRY POINT
+# =============================================================================
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Print startup information
+    print("🤗 HuggingMCP Server Starting...")
+    print(f"   Read Only: {config.read_only}")
+    print(f"   Write Only: {config.write_only}")
+    print(f"   Admin Mode: {config.admin_mode}")
+    print(f"   Authenticated: {bool(config.token)}")
+    print("   Ready for MCP connections! 🚀")
+    
+    # Run the MCP server
+    mcp.run()
