@@ -245,9 +245,11 @@ HuggingMCP exposes the following tools to Claude:
         "run", "main.py"
       ],
       "env": {
-        "HF_TOKEN": "hf_xxxxxxxxxxxx",
+        "HF_TOKEN": "your-hf-token-here",
+        "HF_ADMIN_MODE": "true",
         "HF_READ_ONLY": "false",
-        "HF_ADMIN_MODE": "false"
+        "HF_WRITE_ONLY": "false",
+        "HF_MAX_FILE_SIZE": "100000000"
       }
     }
   }
