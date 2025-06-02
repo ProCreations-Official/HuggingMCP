@@ -39,7 +39,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize MCP server
-mcp = FastMCP("HuggingMCP")
+server = Server("HuggingMCP")
 
 # Global HuggingFace API client
 hf_api = None
