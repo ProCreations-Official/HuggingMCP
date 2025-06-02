@@ -290,7 +290,7 @@ def hf_read_file(
 def hf_write_file(
     repo_id: str,
     filename: str,
-    content: str,
+    content: Union[str, list],
     repo_type: str = "model",
     commit_message: Optional[str] = None
 ) -> Dict[str, Any]:
