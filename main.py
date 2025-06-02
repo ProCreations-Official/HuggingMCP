@@ -308,6 +308,58 @@ def hf_read_file(
         return {"error": f"Failed to read file: {str(e)}"}
 
 @mcp.tool()
+def hf_read_file_chunked(
+    repo_id: str,
+    filename: str,
+    chunk_size: int = 50000,
+    chunk_number: int = 0,
+    repo_type: str = "model",
+    revision: str = "main"
+) -> Dict[str, Any]:
+    """Read a file from a repository in chunks (for very large files)
+    
+    Args:
+        repo_id: Repository ID
+        filename: File to read
+        chunk_size: Size of each chunk in characters
+        chunk_number: Which chunk to read (0-based)
+        repo_type: Repository type
+        revision: Repository revision
+    """
+    try:
+        file_path = hf_hub_download(
+            repo_id=repo_id,
+            filename=filename,
+            repo_type=repo_type,
+            revision=revision,
+            token=TOKEN
+        )
+        
+        file_size = os.path.getsize(file_path)
+        start_pos = chunk_number * chunk_size
+        
+        with open(file_path, 'r', encoding='utf-8') as f:
+            f.seek(start_pos)
+            content = f.read(chunk_size)
+            
+            total_chunks = (file_size + chunk_size - 1) // chunk_size  # Ceiling division
+            
+            return {
+                "repo_id": repo_id,
+                "filename": filename,
+                "content": content,
+                "chunk_number": chunk_number,
+                "chunk_size": len(content),
+                "total_chunks": total_chunks,
+                "file_size": file_size,
+                "has_more": chunk_number < total_chunks - 1,
+                "message": f"📖 Read chunk {chunk_number + 1}/{total_chunks} of {filename}"
+            }
+        
+    except Exception as e:
+        return {"error": f"Failed to read file chunk: {str(e)}"}
+
+@mcp.tool()
 def hf_write_file(
     repo_id: str,
     filename: str,
