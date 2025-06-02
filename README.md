@@ -207,15 +207,13 @@ HuggingMCP exposes the following tools to Claude:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HF_TOKEN` | None | Your Hugging Face access token |
+| `HF_TOKEN` | None | Your Hugging Face access token (required) |
 | `HF_READ_ONLY` | false | Enable read-only mode |
-| `HF_WRITE_ONLY` | false | Enable write-only mode |
-| `HF_ADMIN_MODE` | false | Enable admin operations |
-| `HF_MAX_FILE_SIZE` | 50000000 | Max file size in bytes (50MB) |
+| `HF_ADMIN_MODE` | false | Enable admin operations (repository deletion) |
 
 ### Claude Desktop Config
 
-**Minimal Configuration:**
+**Basic Configuration:**
 ```json
 {
   "mcpServers": {
@@ -243,8 +241,7 @@ HuggingMCP exposes the following tools to Claude:
       "env": {
         "HF_TOKEN": "hf_xxxxxxxxxxxx",
         "HF_READ_ONLY": "false",
-        "HF_ADMIN_MODE": "false",
-        "HF_MAX_FILE_SIZE": "100000000"
+        "HF_ADMIN_MODE": "false"
       }
     }
   }
