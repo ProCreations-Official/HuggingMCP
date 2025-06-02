@@ -226,7 +226,7 @@ def hf_create_repository(
 
 @mcp.tool()
 @handle_hf_error
-def delete_repository(repo_id: str, repo_type: str = "model") -> Dict[str, Any]:
+def hf_delete_repository(repo_id: str, repo_type: str = "model") -> Dict[str, Any]:
     """
     Delete a repository (DANGEROUS - USE WITH CAUTION!)
     
