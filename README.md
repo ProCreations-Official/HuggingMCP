@@ -260,7 +260,8 @@ HuggingMCP exposes the following tools to Claude:
 **2. "Authentication required" errors**
 - Verify your HF_TOKEN is valid at https://huggingface.co/settings/tokens
 - Ensure the token has appropriate permissions (read/write)
-- Check that the token is correctly set in environment or config
+- Check that the token is correctly set in the Claude Desktop config env section
+- Test with "Who am I currently logged in as?" to verify authentication
 
 **3. "Permission denied" errors**
 - Check your permission settings with `get_hf_config`
