@@ -162,6 +162,7 @@ HuggingMCP includes comprehensive permission controls:
 **Via Environment Variables:**
 ```bash
 export HF_READ_ONLY=true   # Enable read-only mode
+export HF_WRITE_ONLY=true  # Enable write-only mode
 export HF_ADMIN_MODE=true  # Enable admin mode
 ```
 
