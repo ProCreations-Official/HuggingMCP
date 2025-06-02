@@ -257,7 +257,6 @@ async def hf_whoami() -> str:
     except Exception as e:
         return f"Error getting user info: {e}"
 
-@mcp.tool()
 async def hf_search_models(
     query: str = "",
     author: Optional[str] = None,
