@@ -1,0 +1,12 @@
+# HuggingMCP Requirements
+# Install with: pip install -r requirements.txt
+
+# Core MCP dependencies
+mcp>=1.0.0
+
+# HuggingFace integration
+huggingface_hub>=0.26.0
+
+# Additional utilities (optional but recommended)
+python-dotenv>=1.0.0  # For .env file support
+aiofiles>=23.0.0      # For async file operations
