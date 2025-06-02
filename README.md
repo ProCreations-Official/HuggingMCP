@@ -227,7 +227,7 @@ HuggingMCP exposes the following tools to Claude:
       "command": "python",
       "args": ["/path/to/main.py"],
       "env": {
-        "HF_TOKEN": "your_token_here"
+        "HF_TOKEN": "your-hf-token-here"
       }
     }
   }
