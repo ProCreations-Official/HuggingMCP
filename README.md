@@ -68,6 +68,8 @@ uv add "mcp[cli]" huggingface_hub
 
 ### Configuration
 
+### Configuration
+
 1. **Open Claude Desktop settings:**
    - Go to Settings → Developer
    - Click "Edit Config" to open `claude_desktop_config.json`
@@ -85,7 +87,9 @@ uv add "mcp[cli]" huggingface_hub
         "main.py"
       ],
       "env": {
-        "HF_TOKEN": "hf_xxxxxxxxxxxxxxxxxxxxxxxxxx"
+        "HF_TOKEN": "hf_xxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "HF_READ_ONLY": "false",
+        "HF_ADMIN_MODE": "false"
       }
     }
   }
@@ -93,6 +97,11 @@ uv add "mcp[cli]" huggingface_hub
 ```
 
 **Important:** Replace `/ABSOLUTE/PATH/TO/YOUR/huggingmcp` with the actual absolute path to your project directory.
+
+**Environment Variables:**
+- `HF_TOKEN`: Your Hugging Face access token (required)
+- `HF_READ_ONLY`: Set to "true" to allow only read operations (optional)
+- `HF_ADMIN_MODE`: Set to "true" to enable repository deletion (optional)
 
 3. **Restart Claude Desktop** to load the MCP server
 
