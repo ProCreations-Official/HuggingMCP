@@ -174,36 +174,32 @@ export HF_ADMIN_MODE=true  # Enable admin mode
 
 HuggingMCP exposes the following tools to Claude:
 
-### Authentication
-- `hf_login` - Login with Hugging Face token
-- `hf_whoami` - Get current user info
-- `hf_logout` - Logout from Hugging Face
+### Configuration & Testing
+- `hf_test` - Test server functionality and connection
+- `get_hf_config` - Get current configuration and capabilities
+- `hf_whoami` - Get current authenticated user info
 
 ### Repository Management
-- `create_repository` - Create new repos (models/datasets/spaces)
-- `delete_repository` - Delete repos (admin mode)
-- `get_repository_info` - Get repo metadata
-- `list_repository_files` - List files in repo
+- `hf_create_repository` - Create new repos (models/datasets/spaces)
+- `hf_delete_repository` - Delete repos (admin mode required)
+- `hf_get_repository_info` - Get repo metadata and details
+- `hf_list_repository_files` - List all files in a repository
 
 ### File Operations
-- `read_file` - Read file content
-- `write_file` - Write/upload files
-- `edit_file` - Precise text replacement editing
-- `delete_file_from_repo` - Delete specific files
+- `hf_read_file` - Read file content from repositories
+- `hf_write_file` - Write/upload files to repositories
+- `hf_edit_file` - Precise text replacement editing
+- `hf_delete_file` - Delete specific files from repositories
 
 ### Search & Discovery
-- `search_models` - Search HF models
-- `search_datasets` - Search HF datasets  
-- `search_spaces` - Search HF Spaces
+- `hf_search_models` - Search Hugging Face models
+- `hf_search_datasets` - Search Hugging Face datasets  
+- `hf_search_spaces` - Search Hugging Face Spaces
 
 ### Collections
-- `create_hf_collection` - Create collections
-- `add_to_collection` - Add items to collections
-- `get_collection_info` - Get collection details
-
-### Configuration
-- `get_hf_config` - Get current config
-- `set_hf_permissions` - Update permissions
+- `hf_collection_create` - Create new collections
+- `hf_collection_add` - Add items to collections
+- `hf_collection_info` - Get collection details and items
 
 ## 🔧 Configuration Options
 
