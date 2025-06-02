@@ -101,7 +101,9 @@ uv add "mcp[cli]" huggingface_hub
 **Environment Variables:**
 - `HF_TOKEN`: Your Hugging Face access token (required)
 - `HF_READ_ONLY`: Set to "true" to allow only read operations (optional)
+- `HF_WRITE_ONLY`: Set to "true" to allow only write operations (optional)
 - `HF_ADMIN_MODE`: Set to "true" to enable repository deletion (optional)
+- `HF_MAX_FILE_SIZE`: Maximum file size in bytes (optional)
 
 3. **Restart Claude Desktop** to load the MCP server
 
