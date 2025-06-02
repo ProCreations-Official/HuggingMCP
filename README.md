@@ -68,8 +68,6 @@ uv add "mcp[cli]" huggingface_hub
 
 ### Configuration
 
-### Configuration
-
 1. **Open Claude Desktop settings:**
    - Go to Settings → Developer
    - Click "Edit Config" to open `claude_desktop_config.json`
