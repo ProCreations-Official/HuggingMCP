@@ -87,9 +87,11 @@ uv add "mcp[cli]" huggingface_hub
         "main.py"
       ],
       "env": {
-        "HF_TOKEN": "hf_xxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "HF_TOKEN": "your-hf-token-here",
+        "HF_ADMIN_MODE": "true",
         "HF_READ_ONLY": "false",
-        "HF_ADMIN_MODE": "false"
+        "HF_WRITE_ONLY": "false",
+        "HF_MAX_FILE_SIZE": "100000000"
       }
     }
   }
