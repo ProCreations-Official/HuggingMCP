@@ -68,23 +68,6 @@ uv add "mcp[cli]" huggingface_hub
 
 ### Configuration
 
-#### Environment Variables (Optional)
-
-Create a `.env` file in your project directory:
-
-```bash
-# Hugging Face Authentication
-HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxxxxxxxx  # Your HF token
-
-# Permission Controls (optional)
-HF_READ_ONLY=false          # Set to 'true' to allow only read operations
-HF_WRITE_ONLY=false         # Set to 'true' to allow only write operations  
-HF_ADMIN_MODE=false         # Set to 'true' to enable repo deletion
-HF_MAX_FILE_SIZE=50000000   # Maximum file size in bytes (50MB default)
-```
-
-#### Claude Desktop Setup
-
 1. **Open Claude Desktop settings:**
    - Go to Settings → Developer
    - Click "Edit Config" to open `claude_desktop_config.json`
