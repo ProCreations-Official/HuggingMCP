@@ -1,443 +1,333 @@
 #!/usr/bin/env python3
 """
-HuggingMCP - Model Context Protocol Server for Hugging Face Hub
-
-This MCP server allows Claude to interact with Hugging Face Hub:
-- Create and manage repositories (models, datasets, spaces)
-- Read and write files in repositories
-- Manage collections
-- Search and explore HF content
-- Advanced file editing with precise text replacement
-
-Author: Built for Claude and AI developers
-License: MIT
+HuggingMCP - Clean Hugging Face MCP Server
 """
 
 import os
-import json
+import sys
 import logging
-import asyncio
-from typing import Dict, List, Optional, Any, Union
-from datetime import datetime
-from pathlib import Path
+from typing import Dict, Any, Optional
 
-# MCP Server imports
-from mcp.server.fastmcp import FastMCP
-from mcp.types import TextContent, ImageContent
-
-# Hugging Face imports
-from huggingface_hub import (
-    HfApi, 
-    create_repo, 
-    upload_file, 
-    upload_folder,
-    delete_repo,
-    delete_file,
-    list_models,
-    list_datasets,
-    list_spaces,
-    model_info,
-    dataset_info,
-    space_info,
-    hf_hub_download,
-    snapshot_download,
-    login,
-    logout,
-    whoami,
-    create_collection,
-    get_collection,
-    add_collection_item,
-    update_collection_item,
-    delete_collection_item
-)
-from huggingface_hub.utils import HfHubHTTPError, RepositoryNotFoundError
-
-# Configure logging
+# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize FastMCP server
+# Import MCP
+try:
+    from mcp.server.fastmcp import FastMCP
+except ImportError:
+    logger.error("MCP not installed. Run: pip3 install 'mcp[cli]'")
+    sys.exit(1)
+
+# Import Hugging Face
+try:
+    from huggingface_hub import (
+        HfApi, create_repo, upload_file, delete_repo, delete_file,
+        list_models, list_datasets, list_spaces, model_info, dataset_info,
+        hf_hub_download, login, logout, whoami, create_collection,
+        get_collection, add_collection_item
+    )
+except ImportError:
+    logger.error("huggingface_hub not installed. Run: pip3 install huggingface_hub")
+    sys.exit(1)
+
+# Initialize MCP server
 mcp = FastMCP("HuggingMCP")
 
-# Global configuration
-class HuggingMCPConfig:
-    def __init__(self):
-        self.token = os.getenv("HF_TOKEN")
-        self.read_only = os.getenv("HF_READ_ONLY", "false").lower() == "true"
-        self.write_only = os.getenv("HF_WRITE_ONLY", "false").lower() == "true"
-        self.admin_mode = os.getenv("HF_ADMIN_MODE", "false").lower() == "true"
-        self.max_file_size = int(os.getenv("HF_MAX_FILE_SIZE", "50000000"))  # 50MB default
-        
-        # Initialize HF API
-        self.api = HfApi(token=self.token) if self.token else HfApi()
-        
-        # Validate permissions
-        if self.read_only and self.write_only:
-            raise ValueError("Cannot set both HF_READ_ONLY and HF_WRITE_ONLY to true")
+# Configuration
+TOKEN = os.getenv("HF_TOKEN")
+READ_ONLY = os.getenv("HF_READ_ONLY", "false").lower() == "true"
+ADMIN_MODE = os.getenv("HF_ADMIN_MODE", "false").lower() == "true"
 
-config = HuggingMCPConfig()
+# Initialize API
+api = HfApi(token=TOKEN) if TOKEN else HfApi()
 
-def permission_check(operation: str) -> bool:
-    """Check if operation is allowed based on current permissions"""
-    if operation == "read":
-        return not config.write_only
-    elif operation == "write":
-        return not config.read_only
-    elif operation == "admin":
-        return config.admin_mode
-    return True
-
-def handle_hf_error(func):
-    """Decorator to handle Hugging Face API errors gracefully"""
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except HfHubHTTPError as e:
-            logger.error(f"HF API Error: {e}")
-            return {"error": f"Hugging Face API Error: {str(e)}"}
-        except RepositoryNotFoundError as e:
-            logger.error(f"Repository not found: {e}")
-            return {"error": f"Repository not found: {str(e)}"}
-        except Exception as e:
-            logger.error(f"Unexpected error: {e}")
-            return {"error": f"Unexpected error: {str(e)}"}
-    return wrapper
+logger.info(f"🤗 HuggingMCP initialized - Token: {'✓' if TOKEN else '✗'}, Admin: {ADMIN_MODE}")
 
 # =============================================================================
-# AUTHENTICATION & USER MANAGEMENT
+# CONFIGURATION TOOLS
 # =============================================================================
 
 @mcp.tool()
-@handle_hf_error
-def hf_login(token: str) -> Dict[str, Any]:
-    """
-    Login to Hugging Face with a token
-    
-    Args:
-        token: Your Hugging Face access token
-        
-    Returns:
-        Login status and user information
-    """
+def hf_test() -> Dict[str, Any]:
+    """Test HuggingMCP server functionality"""
+    return {
+        "status": "✅ HuggingMCP is working!",
+        "authenticated": bool(TOKEN),
+        "admin_mode": ADMIN_MODE,
+        "read_only": READ_ONLY,
+        "tools_registered": "All tools loaded successfully! 🎉"
+    }
+
+@mcp.tool()
+def get_hf_config() -> Dict[str, Any]:
+    """Get current HuggingMCP configuration"""
+    return {
+        "authenticated": bool(TOKEN),
+        "admin_mode": ADMIN_MODE,
+        "read_only": READ_ONLY,
+        "server_version": "1.0.0",
+        "capabilities": {
+            "create_repos": not READ_ONLY,
+            "delete_repos": ADMIN_MODE,
+            "read_files": True,
+            "write_files": not READ_ONLY,
+            "search": True,
+            "collections": not READ_ONLY
+        }
+    }
+
+# =============================================================================
+# AUTHENTICATION
+# =============================================================================
+
+@mcp.tool()
+def hf_whoami() -> Dict[str, Any]:
+    """Get current authenticated user info"""
+    if not TOKEN:
+        return {"error": "Not authenticated. Set HF_TOKEN environment variable."}
     try:
-        login(token=token)
-        user_info = whoami(token=token)
-        config.token = token
-        config.api = HfApi(token=token)
+        user_info = whoami(token=TOKEN)
         return {
-            "status": "success",
-            "message": "Successfully logged in to Hugging Face",
-            "user": user_info
+            "authenticated": True,
+            "user": user_info,
+            "name": user_info.get('name', 'Unknown'),
+            "email": user_info.get('email', 'Unknown')
         }
     except Exception as e:
-        return {"error": f"Login failed: {str(e)}"}
-
-@mcp.tool()
-@handle_hf_error
-def hf_whoami() -> Dict[str, Any]:
-    """
-    Get current user information
-    
-    Returns:
-        Current user details
-    """
-    if not config.token:
-        return {"error": "Not logged in. Please use hf_login first."}
-    
-    user_info = whoami(token=config.token)
-    return {"user": user_info}
-
-@mcp.tool()
-@handle_hf_error
-def hf_logout() -> Dict[str, str]:
-    """
-    Logout from Hugging Face
-    
-    Returns:
-        Logout status
-    """
-    logout()
-    config.token = None
-    config.api = HfApi()
-    return {"status": "success", "message": "Successfully logged out"}
+        return {"error": f"Failed to get user info: {str(e)}"}
 
 # =============================================================================
 # REPOSITORY MANAGEMENT
 # =============================================================================
 
 @mcp.tool()
-@handle_hf_error
 def hf_create_repository(
     repo_id: str,
     repo_type: str = "model",
     private: bool = False,
     description: Optional[str] = None,
-    license: Optional[str] = None,
-    readme_content: Optional[str] = None
+    space_sdk: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    Create a new repository on Hugging Face Hub
+    """Create a new repository on Hugging Face Hub
     
     Args:
         repo_id: Repository ID (username/repo-name)
         repo_type: Type of repository ("model", "dataset", "space")
         private: Whether the repository should be private
         description: Repository description
-        license: Repository license
-        readme_content: Custom README content
-        
-    Returns:
-        Repository creation details
+        space_sdk: Required for Spaces - must be one of: "gradio", "streamlit", "docker", "static"
     """
-    if not permission_check("write"):
-        return {"error": "Write operations not permitted"}
+    if READ_ONLY:
+        return {"error": "❌ Read-only mode - cannot create repositories"}
     
-    if not config.token:
-        return {"error": "Authentication required. Please login first."}
+    if not TOKEN:
+        return {"error": "❌ Authentication required - set HF_TOKEN environment variable"}
     
-    repo_url = create_repo(
-        repo_id=repo_id,
-        repo_type=repo_type,
-        private=private,
-        token=config.token
-    )
+    # Validate space_sdk for Spaces
+    valid_sdks = ["gradio", "streamlit", "docker", "static"]
+    if repo_type == "space":
+        if not space_sdk:
+            return {
+                "error": "❌ space_sdk is required for Spaces",
+                "valid_options": valid_sdks,
+                "help": {
+                    "gradio": "Interactive ML demos with Python",
+                    "streamlit": "Data apps and dashboards with Python",
+                    "docker": "Custom applications with Docker",
+                    "static": "HTML/CSS/JavaScript websites"
+                }
+            }
+        if space_sdk not in valid_sdks:
+            return {
+                "error": f"❌ Invalid space_sdk: {space_sdk}",
+                "valid_options": valid_sdks
+            }
     
-    result = {
-        "status": "success",
-        "repo_url": repo_url,
-        "repo_id": repo_id,
-        "repo_type": repo_type,
-        "private": private
-    }
-    
-    # Add README if provided
-    if readme_content:
-        upload_result = upload_file(
-            path_or_fileobj=readme_content.encode(),
-            path_in_repo="README.md",
-            repo_id=repo_id,
-            repo_type=repo_type,
-            token=config.token,
-            commit_message="Initial README"
-        )
-        result["readme_uploaded"] = True
-    
-    return result
+    try:
+        # Create repository with appropriate parameters
+        create_params = {
+            "repo_id": repo_id,
+            "repo_type": repo_type,
+            "private": private,
+            "token": TOKEN
+        }
+        
+        # Add space_sdk for Spaces
+        if repo_type == "space" and space_sdk:
+            create_params["space_sdk"] = space_sdk
+        
+        repo_url = create_repo(**create_params)
+        
+        result = {
+            "status": "success",
+            "message": f"✅ Created {repo_type} repository: {repo_id}",
+            "repo_url": repo_url,
+            "repo_id": repo_id,
+            "repo_type": repo_type,
+            "private": private
+        }
+        
+        # Add SDK info for Spaces
+        if repo_type == "space":
+            result["space_sdk"] = space_sdk
+            result["next_steps"] = {
+                "gradio": "Upload app.py with Gradio interface + requirements.txt",
+                "streamlit": "Upload app.py with Streamlit app + requirements.txt",
+                "docker": "Upload Dockerfile + your application files",
+                "static": "Upload index.html + CSS/JS files"
+            }[space_sdk]
+        
+        return result
+        
+    except Exception as e:
+        return {"error": f"Failed to create repository: {str(e)}"}
 
 @mcp.tool()
-@handle_hf_error
 def hf_delete_repository(repo_id: str, repo_type: str = "model") -> Dict[str, Any]:
-    """
-    Delete a repository (DANGEROUS - USE WITH CAUTION!)
+    """Delete a repository (requires admin mode)"""
+    if not ADMIN_MODE:
+        return {"error": "❌ Admin mode required for repository deletion"}
     
-    Args:
-        repo_id: Repository ID to delete
-        repo_type: Type of repository ("model", "dataset", "space")
-        
-    Returns:
-        Deletion status
-    """
-    if not permission_check("admin"):
-        return {"error": "Admin permissions required for repository deletion"}
+    if not TOKEN:
+        return {"error": "❌ Authentication required - set HF_TOKEN environment variable"}
     
-    if not config.token:
-        return {"error": "Authentication required"}
-    
-    delete_repo(repo_id=repo_id, repo_type=repo_type, token=config.token)
-    return {
-        "status": "success",
-        "message": f"Repository {repo_id} deleted successfully",
-        "repo_id": repo_id,
-        "repo_type": repo_type
-    }
+    try:
+        delete_repo(repo_id=repo_id, repo_type=repo_type, token=TOKEN)
+        return {
+            "status": "success",
+            "message": f"🗑️ Deleted repository: {repo_id}",
+            "repo_id": repo_id,
+            "repo_type": repo_type
+        }
+    except Exception as e:
+        return {"error": f"Failed to delete repository: {str(e)}"}
 
 @mcp.tool()
-@handle_hf_error
 def hf_get_repository_info(repo_id: str, repo_type: str = "model") -> Dict[str, Any]:
-    """
-    Get detailed information about a repository
-    
-    Args:
-        repo_id: Repository ID
-        repo_type: Type of repository ("model", "dataset", "space")
+    """Get detailed information about a repository"""
+    try:
+        if repo_type == "model":
+            info = model_info(repo_id, token=TOKEN)
+        elif repo_type == "dataset":
+            info = dataset_info(repo_id, token=TOKEN)
+        else:
+            return {"error": f"Unsupported repo_type: {repo_type}"}
         
-    Returns:
-        Repository information and metadata
-    """
-    if not permission_check("read"):
-        return {"error": "Read operations not permitted"}
-    
-    if repo_type == "model":
-        info = model_info(repo_id, token=config.token)
-    elif repo_type == "dataset":
-        info = dataset_info(repo_id, token=config.token)
-    elif repo_type == "space":
-        info = space_info(repo_id, token=config.token)
-    else:
-        return {"error": f"Unknown repo_type: {repo_type}"}
-    
-    return {
-        "repo_id": info.id,
-        "author": info.author,
-        "sha": info.sha,
-        "created_at": info.created_at.isoformat() if info.created_at else None,
-        "last_modified": info.last_modified.isoformat() if info.last_modified else None,
-        "private": info.private,
-        "downloads": getattr(info, 'downloads', 0),
-        "likes": getattr(info, 'likes', 0),
-        "tags": getattr(info, 'tags', []),
-        "siblings": [{"filename": s.rfilename, "size": s.size} for s in info.siblings] if hasattr(info, 'siblings') else []
-    }
+        return {
+            "repo_id": info.id,
+            "author": info.author,
+            "created_at": info.created_at.isoformat() if info.created_at else None,
+            "last_modified": info.last_modified.isoformat() if info.last_modified else None,
+            "private": info.private,
+            "downloads": getattr(info, 'downloads', 0),
+            "likes": getattr(info, 'likes', 0),
+            "tags": getattr(info, 'tags', []),
+            "file_count": len(info.siblings) if hasattr(info, 'siblings') else 0,
+            "files": [s.rfilename for s in info.siblings[:10]] if hasattr(info, 'siblings') else []
+        }
+    except Exception as e:
+        return {"error": f"Failed to get repository info: {str(e)}"}
 
 @mcp.tool()
-@handle_hf_error
-def list_repository_files(repo_id: str, repo_type: str = "model", path: str = "") -> Dict[str, Any]:
-    """
-    List files in a repository
-    
-    Args:
-        repo_id: Repository ID
-        repo_type: Type of repository
-        path: Path within the repository
-        
-    Returns:
-        List of files and directories
-    """
-    if not permission_check("read"):
-        return {"error": "Read operations not permitted"}
-    
-    files = config.api.list_repo_files(
-        repo_id=repo_id,
-        repo_type=repo_type,
-        token=config.token
-    )
-    
-    if path:
-        files = [f for f in files if f.startswith(path)]
-    
-    return {
-        "repo_id": repo_id,
-        "path": path,
-        "files": files
-    }
+def hf_list_repository_files(repo_id: str, repo_type: str = "model") -> Dict[str, Any]:
+    """List all files in a repository"""
+    try:
+        files = api.list_repo_files(repo_id=repo_id, repo_type=repo_type, token=TOKEN)
+        return {
+            "repo_id": repo_id,
+            "repo_type": repo_type,
+            "file_count": len(files),
+            "files": files
+        }
+    except Exception as e:
+        return {"error": f"Failed to list files: {str(e)}"}
 
 # =============================================================================
 # FILE OPERATIONS
 # =============================================================================
 
 @mcp.tool()
-@handle_hf_error
-def read_file(
-    repo_id: str, 
-    filename: str, 
+def hf_read_file(
+    repo_id: str,
+    filename: str,
     repo_type: str = "model",
     revision: str = "main"
 ) -> Dict[str, Any]:
-    """
-    Read a file from a Hugging Face repository
-    
-    Args:
-        repo_id: Repository ID
-        filename: Path to file in repository
-        repo_type: Type of repository
-        revision: Git revision/branch
-        
-    Returns:
-        File content and metadata
-    """
-    if not permission_check("read"):
-        return {"error": "Read operations not permitted"}
-    
+    """Read a file from a repository"""
     try:
         file_path = hf_hub_download(
             repo_id=repo_id,
             filename=filename,
             repo_type=repo_type,
             revision=revision,
-            token=config.token
+            token=TOKEN
         )
         
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        file_size = os.path.getsize(file_path)
-        
         return {
             "repo_id": repo_id,
             "filename": filename,
             "content": content,
-            "size": file_size,
-            "revision": revision
+            "size": len(content),
+            "message": f"📖 Successfully read {filename}"
         }
     except UnicodeDecodeError:
-        # Try reading as binary for non-text files
-        with open(file_path, 'rb') as f:
-            content = f.read()
-        
+        file_size = os.path.getsize(file_path)
         return {
             "repo_id": repo_id,
             "filename": filename,
-            "content": f"<Binary file: {len(content)} bytes>",
-            "size": len(content),
-            "revision": revision,
+            "error": "Binary file - cannot display as text",
+            "size": file_size,
             "is_binary": True
         }
+    except Exception as e:
+        return {"error": f"Failed to read file: {str(e)}"}
 
 @mcp.tool()
-@handle_hf_error
-def write_file(
+def hf_write_file(
     repo_id: str,
     filename: str,
     content: str,
     repo_type: str = "model",
     commit_message: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    Write/upload a file to a Hugging Face repository
+    """Write/upload a file to a repository"""
+    if READ_ONLY:
+        return {"error": "❌ Read-only mode - cannot write files"}
     
-    Args:
-        repo_id: Repository ID
-        filename: Path where to save the file
-        content: File content to write
-        repo_type: Type of repository
-        commit_message: Commit message
+    if not TOKEN:
+        return {"error": "❌ Authentication required - set HF_TOKEN environment variable"}
+    
+    try:
+        if not commit_message:
+            commit_message = f"Upload {filename}"
         
-    Returns:
-        Upload status and details
-    """
-    if not permission_check("write"):
-        return {"error": "Write operations not permitted"}
-    
-    if not config.token:
-        return {"error": "Authentication required"}
-    
-    if len(content.encode()) > config.max_file_size:
-        return {"error": f"File too large. Maximum size: {config.max_file_size} bytes"}
-    
-    if not commit_message:
-        commit_message = f"Update {filename}"
-    
-    commit_url = upload_file(
-        path_or_fileobj=content.encode(),
-        path_in_repo=filename,
-        repo_id=repo_id,
-        repo_type=repo_type,
-        token=config.token,
-        commit_message=commit_message
-    )
-    
-    return {
-        "status": "success",
-        "repo_id": repo_id,
-        "filename": filename,
-        "commit_url": commit_url,
-        "commit_message": commit_message,
-        "size": len(content.encode())
-    }
+        commit_url = upload_file(
+            path_or_fileobj=content.encode('utf-8'),
+            path_in_repo=filename,
+            repo_id=repo_id,
+            repo_type=repo_type,
+            token=TOKEN,
+            commit_message=commit_message
+        )
+        
+        return {
+            "status": "success",
+            "message": f"📝 Successfully wrote {filename}",
+            "repo_id": repo_id,
+            "filename": filename,
+            "size": len(content.encode('utf-8')),
+            "commit_url": commit_url,
+            "commit_message": commit_message
+        }
+    except Exception as e:
+        return {"error": f"Failed to write file: {str(e)}"}
 
 @mcp.tool()
-@handle_hf_error
-def edit_file(
+def hf_edit_file(
     repo_id: str,
     filename: str,
     old_text: str,
@@ -445,470 +335,309 @@ def edit_file(
     repo_type: str = "model",
     commit_message: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    Edit a file by replacing specific text content (PRECISE EDITING)
+    """Edit a file by replacing specific text (PRECISE EDITING)"""
+    if READ_ONLY:
+        return {"error": "❌ Read-only mode - cannot edit files"}
     
-    Args:
-        repo_id: Repository ID
-        filename: Path to file to edit
-        old_text: Exact text to find and replace (must match exactly)
-        new_text: Text to replace it with
-        repo_type: Type of repository
-        commit_message: Commit message
+    try:
+        # Read current content
+        read_result = hf_read_file(repo_id, filename, repo_type)
+        if "error" in read_result:
+            return read_result
         
-    Returns:
-        Edit status and details
-    """
-    if not permission_check("write"):
-        return {"error": "Write operations not permitted"}
-    
-    if not config.token:
-        return {"error": "Authentication required"}
-    
-    # First, read the current file content
-    read_result = read_file(repo_id, filename, repo_type)
-    if "error" in read_result:
-        return read_result
-    
-    current_content = read_result["content"]
-    
-    # Check if old_text exists in the file
-    if old_text not in current_content:
+        current_content = read_result["content"]
+        
+        # Check if old_text exists
+        if old_text not in current_content:
+            return {
+                "error": f"❌ Text not found in {filename}",
+                "searched_for": old_text[:100] + "..." if len(old_text) > 100 else old_text,
+                "file_preview": current_content[:200] + "..." if len(current_content) > 200 else current_content
+            }
+        
+        # Replace text (only first occurrence)
+        new_content = current_content.replace(old_text, new_text, 1)
+        
+        if not commit_message:
+            commit_message = f"Edit {filename}: Replace text"
+        
+        # Write updated content
+        write_result = hf_write_file(repo_id, filename, new_content, repo_type, commit_message)
+        
+        if "error" in write_result:
+            return write_result
+        
         return {
-            "error": f"Text not found in file. Could not locate: {old_text[:100]}{'...' if len(old_text) > 100 else ''}"
+            "status": "success",
+            "message": f"✏️ Successfully edited {filename}",
+            "repo_id": repo_id,
+            "filename": filename,
+            "old_text_length": len(old_text),
+            "new_text_length": len(new_text),
+            "total_size": len(new_content),
+            "commit_url": write_result["commit_url"]
         }
-    
-    # Perform the replacement
-    new_content = current_content.replace(old_text, new_text, 1)  # Replace only first occurrence
-    
-    if not commit_message:
-        commit_message = f"Edit {filename}: Replace text"
-    
-    # Write the updated content
-    write_result = write_file(repo_id, filename, new_content, repo_type, commit_message)
-    
-    if "error" in write_result:
-        return write_result
-    
-    return {
-        "status": "success",
-        "repo_id": repo_id,
-        "filename": filename,
-        "old_text_length": len(old_text),
-        "new_text_length": len(new_text),
-        "total_size": len(new_content.encode()),
-        "commit_url": write_result["commit_url"],
-        "commit_message": commit_message
-    }
+    except Exception as e:
+        return {"error": f"Failed to edit file: {str(e)}"}
 
 @mcp.tool()
-@handle_hf_error
-def delete_file_from_repo(
+def hf_delete_file(
     repo_id: str,
     filename: str,
     repo_type: str = "model",
     commit_message: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    Delete a file from a repository
+    """Delete a file from a repository"""
+    if READ_ONLY:
+        return {"error": "❌ Read-only mode - cannot delete files"}
     
-    Args:
-        repo_id: Repository ID
-        filename: Path to file to delete
-        repo_type: Type of repository
-        commit_message: Commit message
+    if not TOKEN:
+        return {"error": "❌ Authentication required - set HF_TOKEN environment variable"}
+    
+    try:
+        if not commit_message:
+            commit_message = f"Delete {filename}"
         
-    Returns:
-        Deletion status
-    """
-    if not permission_check("write"):
-        return {"error": "Write operations not permitted"}
-    
-    if not config.token:
-        return {"error": "Authentication required"}
-    
-    if not commit_message:
-        commit_message = f"Delete {filename}"
-    
-    delete_file(
-        path_in_repo=filename,
-        repo_id=repo_id,
-        repo_type=repo_type,
-        token=config.token,
-        commit_message=commit_message
-    )
-    
-    return {
-        "status": "success",
-        "repo_id": repo_id,
-        "filename": filename,
-        "commit_message": commit_message
-    }
+        delete_file(
+            path_in_repo=filename,
+            repo_id=repo_id,
+            repo_type=repo_type,
+            token=TOKEN,
+            commit_message=commit_message
+        )
+        
+        return {
+            "status": "success",
+            "message": f"🗑️ Successfully deleted {filename}",
+            "repo_id": repo_id,
+            "filename": filename,
+            "commit_message": commit_message
+        }
+    except Exception as e:
+        return {"error": f"Failed to delete file: {str(e)}"}
 
 # =============================================================================
-# SEARCH & DISCOVERY
+# SEARCH OPERATIONS
 # =============================================================================
 
 @mcp.tool()
-@handle_hf_error
-def search_models(
+def hf_search_models(
     query: Optional[str] = None,
     author: Optional[str] = None,
     filter_tag: Optional[str] = None,
-    sort: str = "downloads",
-    direction: int = -1,
     limit: int = 20
 ) -> Dict[str, Any]:
-    """
-    Search for models on Hugging Face Hub
-    
-    Args:
-        query: Search query
-        author: Filter by author
-        filter_tag: Filter by tag (e.g., "pytorch", "text-classification")
-        sort: Sort by ("downloads", "created_at", "last_modified")
-        direction: Sort direction (-1 for desc, 1 for asc)
-        limit: Maximum results
+    """Search for models on Hugging Face Hub"""
+    try:
+        models = list_models(
+            search=query,
+            author=author,
+            filter=filter_tag,
+            sort="downloads",
+            direction=-1,
+            limit=limit,
+            token=TOKEN
+        )
         
-    Returns:
-        List of matching models
-    """
-    if not permission_check("read"):
-        return {"error": "Read operations not permitted"}
-    
-    models = list_models(
-        search=query,
-        author=author,
-        filter=filter_tag,
-        sort=sort,
-        direction=direction,
-        limit=limit,
-        token=config.token
-    )
-    
-    results = []
-    for model in models:
-        results.append({
-            "id": model.id,
-            "author": model.author,
-            "downloads": model.downloads,
-            "likes": model.likes,
-            "created_at": model.created_at.isoformat() if model.created_at else None,
-            "last_modified": model.last_modified.isoformat() if model.last_modified else None,
-            "tags": model.tags,
-            "private": model.private
-        })
-    
-    return {
-        "query": query,
-        "total_results": len(results),
-        "models": results
-    }
+        results = []
+        for model in models:
+            results.append({
+                "id": model.id,
+                "author": model.author,
+                "downloads": model.downloads,
+                "likes": model.likes,
+                "tags": model.tags[:5],  # Limit tags for readability
+                "created_at": model.created_at.isoformat() if model.created_at else None
+            })
+        
+        return {
+            "query": query,
+            "author": author,
+            "filter_tag": filter_tag,
+            "total_results": len(results),
+            "models": results
+        }
+    except Exception as e:
+        return {"error": f"Failed to search models: {str(e)}"}
 
 @mcp.tool()
-@handle_hf_error
-def search_datasets(
+def hf_search_datasets(
     query: Optional[str] = None,
     author: Optional[str] = None,
     filter_tag: Optional[str] = None,
-    sort: str = "downloads",
-    direction: int = -1,
     limit: int = 20
 ) -> Dict[str, Any]:
-    """
-    Search for datasets on Hugging Face Hub
-    
-    Args:
-        query: Search query
-        author: Filter by author
-        filter_tag: Filter by tag
-        sort: Sort by ("downloads", "created_at", "last_modified")
-        direction: Sort direction
-        limit: Maximum results
+    """Search for datasets on Hugging Face Hub"""
+    try:
+        datasets = list_datasets(
+            search=query,
+            author=author,
+            filter=filter_tag,
+            limit=limit,
+            token=TOKEN
+        )
         
-    Returns:
-        List of matching datasets
-    """
-    if not permission_check("read"):
-        return {"error": "Read operations not permitted"}
-    
-    datasets = list_datasets(
-        search=query,
-        author=author,
-        filter=filter_tag,
-        sort=sort,
-        direction=direction,
-        limit=limit,
-        token=config.token
-    )
-    
-    results = []
-    for dataset in datasets:
-        results.append({
-            "id": dataset.id,
-            "author": dataset.author,
-            "downloads": dataset.downloads,
-            "likes": dataset.likes,
-            "created_at": dataset.created_at.isoformat() if dataset.created_at else None,
-            "last_modified": dataset.last_modified.isoformat() if dataset.last_modified else None,
-            "tags": dataset.tags,
-            "private": dataset.private
-        })
-    
-    return {
-        "query": query,
-        "total_results": len(results),
-        "datasets": results
-    }
+        results = []
+        for dataset in datasets:
+            results.append({
+                "id": dataset.id,
+                "author": dataset.author,
+                "downloads": dataset.downloads,
+                "likes": dataset.likes,
+                "tags": dataset.tags[:5],
+                "created_at": dataset.created_at.isoformat() if dataset.created_at else None
+            })
+        
+        return {
+            "query": query,
+            "total_results": len(results),
+            "datasets": results
+        }
+    except Exception as e:
+        return {"error": f"Failed to search datasets: {str(e)}"}
 
 @mcp.tool()
-@handle_hf_error
-def search_spaces(
+def hf_search_spaces(
     query: Optional[str] = None,
     author: Optional[str] = None,
-    filter_tag: Optional[str] = None,
-    sort: str = "created_at",
-    direction: int = -1,
     limit: int = 20
 ) -> Dict[str, Any]:
-    """
-    Search for Spaces on Hugging Face Hub
-    
-    Args:
-        query: Search query
-        author: Filter by author
-        filter_tag: Filter by tag
-        sort: Sort by
-        direction: Sort direction
-        limit: Maximum results
+    """Search for Spaces on Hugging Face Hub"""
+    try:
+        spaces = list_spaces(
+            search=query,
+            author=author,
+            limit=limit,
+            token=TOKEN
+        )
         
-    Returns:
-        List of matching Spaces
-    """
-    if not permission_check("read"):
-        return {"error": "Read operations not permitted"}
-    
-    spaces = list_spaces(
-        search=query,
-        author=author,
-        filter=filter_tag,
-        sort=sort,
-        direction=direction,
-        limit=limit,
-        token=config.token
-    )
-    
-    results = []
-    for space in spaces:
-        results.append({
-            "id": space.id,
-            "author": space.author,
-            "likes": space.likes,
-            "created_at": space.created_at.isoformat() if space.created_at else None,
-            "last_modified": space.last_modified.isoformat() if space.last_modified else None,
-            "tags": space.tags,
-            "private": space.private,
-            "sdk": getattr(space, 'sdk', None),
-            "runtime": getattr(space, 'runtime', None)
-        })
-    
-    return {
-        "query": query,
-        "total_results": len(results),
-        "spaces": results
-    }
+        results = []
+        for space in spaces:
+            results.append({
+                "id": space.id,
+                "author": space.author,
+                "likes": space.likes,
+                "tags": space.tags[:5],
+                "sdk": getattr(space, 'sdk', None),
+                "created_at": space.created_at.isoformat() if space.created_at else None
+            })
+        
+        return {
+            "query": query,
+            "total_results": len(results),
+            "spaces": results
+        }
+    except Exception as e:
+        return {"error": f"Failed to search spaces: {str(e)}"}
 
 # =============================================================================
-# COLLECTIONS MANAGEMENT
+# COLLECTIONS
 # =============================================================================
 
 @mcp.tool()
-@handle_hf_error
-def create_hf_collection(
+def hf_collection_create(
     title: str,
     namespace: str,
     description: Optional[str] = None,
     private: bool = False
 ) -> Dict[str, Any]:
-    """
-    Create a new collection
+    """Create a new collection"""
+    if READ_ONLY:
+        return {"error": "❌ Read-only mode - cannot create collections"}
     
-    Args:
-        title: Collection title
-        namespace: Namespace (username or org)
-        description: Collection description
-        private: Whether collection is private
+    if not TOKEN:
+        return {"error": "❌ Authentication required"}
+    
+    try:
+        collection = create_collection(
+            title=title,
+            namespace=namespace,
+            description=description,
+            private=private,
+            token=TOKEN
+        )
         
-    Returns:
-        Collection creation details
-    """
-    if not permission_check("write"):
-        return {"error": "Write operations not permitted"}
-    
-    if not config.token:
-        return {"error": "Authentication required"}
-    
-    collection = create_collection(
-        title=title,
-        namespace=namespace,
-        description=description,
-        private=private,
-        token=config.token
-    )
-    
-    return {
-        "status": "success",
-        "collection_slug": collection.slug,
-        "title": collection.title,
-        "namespace": collection.namespace,
-        "url": f"https://huggingface.co/collections/{namespace}/{collection.slug}"
-    }
+        return {
+            "status": "success",
+            "message": f"📚 Created collection: {title}",
+            "collection_slug": collection.slug,
+            "title": collection.title,
+            "namespace": collection.namespace,
+            "url": f"https://huggingface.co/collections/{namespace}/{collection.slug}"
+        }
+    except Exception as e:
+        return {"error": f"Failed to create collection: {str(e)}"}
 
 @mcp.tool()
-@handle_hf_error
-def add_to_collection(
+def hf_collection_add(
     collection_slug: str,
     item_id: str,
     item_type: str,
     note: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    Add an item to a collection
+    """Add an item to a collection"""
+    if READ_ONLY:
+        return {"error": "❌ Read-only mode - cannot modify collections"}
     
-    Args:
-        collection_slug: Collection slug (namespace/slug)
-        item_id: Repository ID to add
-        item_type: Type of item ("model", "dataset", "space", "paper")
-        note: Optional note about the item
+    if not TOKEN:
+        return {"error": "❌ Authentication required"}
+    
+    try:
+        add_collection_item(
+            collection_slug=collection_slug,
+            item_id=item_id,
+            item_type=item_type,
+            note=note,
+            token=TOKEN
+        )
         
-    Returns:
-        Addition status
-    """
-    if not permission_check("write"):
-        return {"error": "Write operations not permitted"}
-    
-    if not config.token:
-        return {"error": "Authentication required"}
-    
-    add_collection_item(
-        collection_slug=collection_slug,
-        item_id=item_id,
-        item_type=item_type,
-        note=note,
-        token=config.token
-    )
-    
-    return {
-        "status": "success",
-        "collection_slug": collection_slug,
-        "item_id": item_id,
-        "item_type": item_type,
-        "note": note
-    }
-
-@mcp.tool()
-@handle_hf_error
-def get_collection_info(collection_slug: str) -> Dict[str, Any]:
-    """
-    Get information about a collection
-    
-    Args:
-        collection_slug: Collection slug (namespace/slug)
-        
-    Returns:
-        Collection details and items
-    """
-    if not permission_check("read"):
-        return {"error": "Read operations not permitted"}
-    
-    collection = get_collection(collection_slug, token=config.token)
-    
-    items = []
-    for item in collection.items:
-        items.append({
-            "item_object_id": item.item_object_id,
-            "item_id": item.item_id,
-            "item_type": item.item_type,
-            "position": item.position,
-            "note": getattr(item, 'note', None)
-        })
-    
-    return {
-        "slug": collection.slug,
-        "title": collection.title,
-        "description": collection.description,
-        "owner": collection.owner,
-        "items": items,
-        "item_count": len(items),
-        "url": collection.url
-    }
-
-# =============================================================================
-# CONFIGURATION & UTILITIES
-# =============================================================================
-
-@mcp.tool()
-def get_hf_config() -> Dict[str, Any]:
-    """
-    Get current HuggingMCP configuration
-    
-    Returns:
-        Current configuration settings
-    """
-    return {
-        "authenticated": bool(config.token),
-        "read_only": config.read_only,
-        "write_only": config.write_only,
-        "admin_mode": config.admin_mode,
-        "max_file_size": config.max_file_size,
-        "permissions": {
-            "read": permission_check("read"),
-            "write": permission_check("write"),
-            "admin": permission_check("admin")
+        return {
+            "status": "success",
+            "message": f"➕ Added {item_id} to collection",
+            "collection_slug": collection_slug,
+            "item_id": item_id,
+            "item_type": item_type
         }
-    }
+    except Exception as e:
+        return {"error": f"Failed to add to collection: {str(e)}"}
 
 @mcp.tool()
-def set_hf_permissions(
-    read_only: Optional[bool] = None,
-    write_only: Optional[bool] = None,
-    admin_mode: Optional[bool] = None
-) -> Dict[str, Any]:
-    """
-    Update HuggingMCP permissions
-    
-    Args:
-        read_only: Enable read-only mode
-        write_only: Enable write-only mode  
-        admin_mode: Enable admin mode
+def hf_collection_info(collection_slug: str) -> Dict[str, Any]:
+    """Get information about a collection"""
+    try:
+        collection = get_collection(collection_slug, token=TOKEN)
         
-    Returns:
-        Updated configuration
-    """
-    if read_only is not None:
-        config.read_only = read_only
-    if write_only is not None:
-        config.write_only = write_only
-    if admin_mode is not None:
-        config.admin_mode = admin_mode
-    
-    if config.read_only and config.write_only:
-        config.write_only = False  # Prioritize read_only
-    
-    return get_hf_config()
+        items = []
+        for item in collection.items:
+            items.append({
+                "item_id": item.item_id,
+                "item_type": item.item_type,
+                "position": item.position,
+                "note": getattr(item, 'note', None)
+            })
+        
+        return {
+            "slug": collection.slug,
+            "title": collection.title,
+            "description": collection.description,
+            "owner": collection.owner,
+            "items": items,
+            "item_count": len(items),
+            "url": collection.url
+        }
+    except Exception as e:
+        return {"error": f"Failed to get collection info: {str(e)}"}
 
 # =============================================================================
-# MAIN SERVER ENTRY POINT
+# SERVER STARTUP
 # =============================================================================
 
 if __name__ == "__main__":
-    # Print startup information
     print("🤗 HuggingMCP Server Starting...")
-    print(f"   Read Only: {config.read_only}")
-    print(f"   Write Only: {config.write_only}")
-    print(f"   Admin Mode: {config.admin_mode}")
-    print(f"   Authenticated: {bool(config.token)}")
-    print("   Ready for MCP connections! 🚀")
+    print(f"   Authenticated: {'✅' if TOKEN else '❌'}")
+    print(f"   Admin Mode: {'✅' if ADMIN_MODE else '❌'}")
+    print(f"   Read Only: {'✅' if READ_ONLY else '❌'}")
+    print("   🚀 Ready with 17 HF tools!")
     
-    # Run the MCP server
+    # Run the server
     mcp.run()
