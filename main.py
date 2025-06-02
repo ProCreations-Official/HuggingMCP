@@ -253,7 +253,7 @@ def hf_delete_repository(repo_id: str, repo_type: str = "model") -> Dict[str, An
 
 @mcp.tool()
 @handle_hf_error
-def get_repository_info(repo_id: str, repo_type: str = "model") -> Dict[str, Any]:
+def hf_get_repository_info(repo_id: str, repo_type: str = "model") -> Dict[str, Any]:
     """
     Get detailed information about a repository
     
