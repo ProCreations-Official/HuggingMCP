@@ -167,7 +167,7 @@ def hf_logout() -> Dict[str, str]:
 
 @mcp.tool()
 @handle_hf_error
-def create_repository(
+def hf_create_repository(
     repo_id: str,
     repo_type: str = "model",
     private: bool = False,
