@@ -302,6 +302,20 @@ def hf_write_file(
         return {"error": "❌ Authentication required - set HF_TOKEN environment variable"}
     
     try:
+        # Handle different content formats
+        if isinstance(content, list):
+            # If content is a list of text objects, extract the text
+            text_content = ""
+            for item in content:
+                if isinstance(item, dict) and 'text' in item:
+                    text_content += item['text']
+                elif isinstance(item, str):
+                    text_content += item
+            content = text_content
+        elif not isinstance(content, str):
+            # Convert other types to string
+            content = str(content)
+        
         if not commit_message:
             commit_message = f"Upload {filename}"
         
