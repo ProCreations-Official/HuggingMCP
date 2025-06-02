@@ -74,7 +74,178 @@ def init_hf_api():
     except Exception as e:
         raise ValueError(f"Failed to initialize HuggingFace API: {e}")
 
-@mcp.tool()
+@server.list_tools()
+async def handle_list_tools() -> list[types.Tool]:
+    """List available tools"""
+    return [
+        types.Tool(
+            name="hf_whoami",
+            description="Get information about the current HuggingFace user",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        ),
+        types.Tool(
+            name="hf_search_models",
+            description="Search for models on HuggingFace Hub",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"},
+                    "author": {"type": "string", "description": "Filter by author"},
+                    "tags": {"type": "string", "description": "Comma-separated tags"},
+                    "limit": {"type": "integer", "description": "Limit results", "default": 20}
+                },
+                "required": []
+            }
+        ),
+        types.Tool(
+            name="hf_search_datasets",
+            description="Search for datasets on HuggingFace Hub",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"},
+                    "author": {"type": "string", "description": "Filter by author"},
+                    "tags": {"type": "string", "description": "Comma-separated tags"},
+                    "limit": {"type": "integer", "description": "Limit results", "default": 20}
+                },
+                "required": []
+            }
+        ),
+        types.Tool(
+            name="hf_search_spaces",
+            description="Search for spaces on HuggingFace Hub",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"},
+                    "author": {"type": "string", "description": "Filter by author"},
+                    "tags": {"type": "string", "description": "Comma-separated tags"},
+                    "limit": {"type": "integer", "description": "Limit results", "default": 20}
+                },
+                "required": []
+            }
+        ),
+        types.Tool(
+            name="hf_get_repo_info",
+            description="Get detailed information about a repository",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "repo_id": {"type": "string", "description": "Repository ID"},
+                    "repo_type": {"type": "string", "description": "Repository type", "default": "model"}
+                },
+                "required": ["repo_id"]
+            }
+        ),
+        types.Tool(
+            name="hf_list_repo_files",
+            description="List files in a repository",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "repo_id": {"type": "string", "description": "Repository ID"},
+                    "repo_type": {"type": "string", "description": "Repository type", "default": "model"},
+                    "path": {"type": "string", "description": "Path filter", "default": ""}
+                },
+                "required": ["repo_id"]
+            }
+        ),
+        types.Tool(
+            name="hf_read_file",
+            description="Read a file from a HuggingFace repository",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "repo_id": {"type": "string", "description": "Repository ID"},
+                    "file_path": {"type": "string", "description": "File path"},
+                    "repo_type": {"type": "string", "description": "Repository type", "default": "model"}
+                },
+                "required": ["repo_id", "file_path"]
+            }
+        ),
+        types.Tool(
+            name="hf_create_repo",
+            description="Create a new repository",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "repo_id": {"type": "string", "description": "Repository ID"},
+                    "repo_type": {"type": "string", "description": "Repository type", "default": "model"},
+                    "private": {"type": "boolean", "description": "Private repository", "default": False},
+                    "license": {"type": "string", "description": "License"},
+                    "space_sdk": {"type": "string", "description": "Space SDK for spaces"}
+                },
+                "required": ["repo_id"]
+            }
+        ),
+        types.Tool(
+            name="hf_upload_file",
+            description="Upload a file to a HuggingFace repository",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "repo_id": {"type": "string", "description": "Repository ID"},
+                    "file_path": {"type": "string", "description": "File path"},
+                    "file_content": {"type": "string", "description": "File content"},
+                    "repo_type": {"type": "string", "description": "Repository type", "default": "model"},
+                    "commit_message": {"type": "string", "description": "Commit message"}
+                },
+                "required": ["repo_id", "file_path", "file_content"]
+            }
+        ),
+        types.Tool(
+            name="hf_edit_file",
+            description="Edit a file by replacing old_text with new_text",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "repo_id": {"type": "string", "description": "Repository ID"},
+                    "file_path": {"type": "string", "description": "File path"},
+                    "old_text": {"type": "string", "description": "Text to replace"},
+                    "new_text": {"type": "string", "description": "New text"},
+                    "repo_type": {"type": "string", "description": "Repository type", "default": "model"},
+                    "commit_message": {"type": "string", "description": "Commit message"}
+                },
+                "required": ["repo_id", "file_path", "old_text", "new_text"]
+            }
+        )
+    ]
+
+@server.call_tool()
+async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+    """Handle tool calls"""
+    try:
+        if name == "hf_whoami":
+            result = await hf_whoami()
+        elif name == "hf_search_models":
+            result = await hf_search_models(**arguments)
+        elif name == "hf_search_datasets":
+            result = await hf_search_datasets(**arguments)
+        elif name == "hf_search_spaces":
+            result = await hf_search_spaces(**arguments)
+        elif name == "hf_get_repo_info":
+            result = await hf_get_repo_info(**arguments)
+        elif name == "hf_list_repo_files":
+            result = await hf_list_repo_files(**arguments)
+        elif name == "hf_read_file":
+            result = await hf_read_file(**arguments)
+        elif name == "hf_create_repo":
+            result = await hf_create_repo(**arguments)
+        elif name == "hf_upload_file":
+            result = await hf_upload_file(**arguments)
+        elif name == "hf_edit_file":
+            result = await hf_edit_file(**arguments)
+        else:
+            result = f"Unknown tool: {name}"
+        
+        return [types.TextContent(type="text", text=str(result))]
+    except Exception as e:
+        return [types.TextContent(type="text", text=f"Error: {str(e)}")]
+
 async def hf_whoami() -> str:
     """Get information about the current HuggingFace user"""
     if not check_permission("read", get_permission_level()):
