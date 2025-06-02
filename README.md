@@ -289,7 +289,8 @@ logging.basicConfig(level=logging.DEBUG)
 1. **Check the logs** in Claude Desktop's MCP log files
 2. **Verify configuration** using the `get_hf_config` tool
 3. **Test authentication** with `hf_whoami`
-4. **Start simple** with read operations before trying writes
+4. **Test basic functionality** with `hf_test`
+5. **Start simple** with read operations before trying writes
 
 ## 🤝 Contributing
 
