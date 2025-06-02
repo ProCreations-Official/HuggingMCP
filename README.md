@@ -268,10 +268,10 @@ HuggingMCP exposes the following tools to Claude:
 - Verify you're not in read-only mode for write operations
 - Ensure admin mode is enabled for deletion operations
 
-**4. "File too large" errors**
-- Check the file size against `HF_MAX_FILE_SIZE` setting
-- Increase the limit via environment variable if needed
-- Consider splitting large files into smaller chunks
+**4. General debugging tips**
+- Check the file exists and you have permissions to access it
+- Verify the repository name and file path are correct
+- Ensure you're not in read-only mode for write operations
 
 ### Debug Logs
 
