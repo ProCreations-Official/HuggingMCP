@@ -537,7 +537,7 @@ def hf_search_spaces(
 @mcp.tool()
 def hf_collection_create(
     title: str,
-    namespace: str,
+    namespace: Optional[str] = None,
     description: Optional[str] = None,
     private: bool = False
 ) -> Dict[str, Any]:
@@ -549,6 +549,11 @@ def hf_collection_create(
         return {"error": "❌ Authentication required"}
     
     try:
+        # If no namespace provided, get the current user's username
+        if namespace is None:
+            user_info = whoami(token=TOKEN)
+            namespace = user_info.get('name', 'unknown')
+        
         collection = create_collection(
             title=title,
             namespace=namespace,
@@ -562,8 +567,8 @@ def hf_collection_create(
             "message": f"📚 Created collection: {title}",
             "collection_slug": collection.slug,
             "title": collection.title,
-            "namespace": collection.namespace,
-            "url": f"https://huggingface.co/collections/{namespace}/{collection.slug}"
+            "owner": getattr(collection, 'owner', namespace),
+            "url": collection.url if hasattr(collection, 'url') else f"https://huggingface.co/collections/{namespace}/{collection.slug}"
         }
     except Exception as e:
         return {"error": f"Failed to create collection: {str(e)}"}
