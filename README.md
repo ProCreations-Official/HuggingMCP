@@ -216,6 +216,13 @@ HuggingMCP exposes the following tools to Claude:
 - `hf_search_datasets` - Search Hugging Face datasets  
 - `hf_search_spaces` - Search Hugging Face Spaces
 
+### Pull Requests & Collaboration
+- `hf_create_pull_request` - Create pull requests on repositories
+- `hf_create_commit_pr` - Create commits with multiple files as PR
+- `hf_upload_file_pr` - Upload single file and create PR  
+- `hf_list_pull_requests` - List PRs with filtering options
+- `hf_get_pull_request_details` - Get detailed PR information
+
 ### Collections
 - `hf_collection_create` - Create new collections
 - `hf_collection_add` - Add items to collections
