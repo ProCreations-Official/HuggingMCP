@@ -722,6 +722,286 @@ def hf_collection_info(collection_slug: str) -> Dict[str, Any]:
         return {"error": f"Failed to get collection info: {str(e)}"}
 
 # =============================================================================
+# PULL REQUESTS & DISCUSSIONS
+# =============================================================================
+
+@mcp.tool()
+def hf_create_pull_request(
+    repo_id: str,
+    title: str,
+    description: Optional[str] = None,
+    repo_type: str = "model"
+) -> Dict[str, Any]:
+    """Create a pull request on a Hugging Face repository
+    
+    Args:
+        repo_id: Repository ID (username/repo-name)
+        title: Title of the pull request (3-200 characters)
+        description: Optional description for the pull request
+        repo_type: Type of repository ("model", "dataset", "space")
+    """
+    if not TOKEN:
+        return {"error": "❌ Authentication required - set HF_TOKEN environment variable"}
+    
+    # Validate title length
+    if len(title.strip()) < 3:
+        return {"error": "❌ Title must be at least 3 characters long"}
+    if len(title.strip()) > 200:
+        return {"error": "❌ Title must be 200 characters or less"}
+    
+    try:
+        # Create the pull request using create_discussion with pull_request=True
+        discussion = create_discussion(
+            repo_id=repo_id,
+            title=title.strip(),
+            description=description or "Pull Request created with HuggingMCP",
+            repo_type=repo_type,
+            pull_request=True,
+            token=TOKEN
+        )
+        
+        return {
+            "status": "success",
+            "message": f"🔀 Created pull request: {title}",
+            "pr_number": discussion.num,
+            "pr_title": discussion.title,
+            "pr_url": discussion.url,
+            "repo_id": repo_id,
+            "repo_type": repo_type,
+            "status_note": "Pull request created in draft mode - ready for changes!"
+        }
+    except Exception as e:
+        return {"error": f"Failed to create pull request: {str(e)}"}
+
+@mcp.tool()
+def hf_create_commit_pr(
+    repo_id: str,
+    commit_message: str,
+    files: list,
+    pr_title: Optional[str] = None,
+    pr_description: Optional[str] = None,
+    repo_type: str = "model",
+    parent_commit: Optional[str] = None
+) -> Dict[str, Any]:
+    """Create a commit with changes and open it as a pull request
+    
+    Args:
+        repo_id: Repository ID (username/repo-name)
+        commit_message: Message for the commit
+        files: List of file operations [{"path": "file.txt", "content": "content"}]
+        pr_title: Title for the pull request (auto-generated if not provided)
+        pr_description: Description for the pull request
+        repo_type: Type of repository ("model", "dataset", "space")
+        parent_commit: Parent commit hash for the PR base
+    """
+    if READ_ONLY:
+        return {"error": "❌ Read-only mode - cannot create commits or pull requests"}
+    
+    if not TOKEN:
+        return {"error": "❌ Authentication required - set HF_TOKEN environment variable"}
+    
+    if not files:
+        return {"error": "❌ At least one file operation is required"}
+    
+    try:
+        from huggingface_hub import CommitOperationAdd
+        
+        # Create commit operations from files list
+        operations = []
+        for file_op in files:
+            if not isinstance(file_op, dict) or "path" not in file_op or "content" not in file_op:
+                return {"error": f"❌ Invalid file operation format. Use: {{\"path\": \"file.txt\", \"content\": \"content\"}}"}
+            
+            operations.append(
+                CommitOperationAdd(
+                    path_in_repo=file_op["path"],
+                    path_or_fileobj=file_op["content"].encode('utf-8')
+                )
+            )
+        
+        # Create commit with PR
+        commit_result = api.create_commit(
+            repo_id=repo_id,
+            operations=operations,
+            commit_message=commit_message,
+            repo_type=repo_type,
+            create_pr=True,
+            pr_title=pr_title or f"PR: {commit_message}",
+            pr_description=pr_description or f"Automated pull request created with HuggingMCP\n\nCommit: {commit_message}",
+            parent_commit=parent_commit,
+            token=TOKEN
+        )
+        
+        return {
+            "status": "success",
+            "message": f"🔀 Created commit and pull request: {commit_message}",
+            "commit_url": commit_result.commit_url,
+            "pr_url": commit_result.pr_url if hasattr(commit_result, 'pr_url') else None,
+            "commit_sha": commit_result.oid,
+            "repo_id": repo_id,
+            "repo_type": repo_type,
+            "files_changed": len(operations),
+            "note": "Pull request created with your changes!"
+        }
+    except Exception as e:
+        return {"error": f"Failed to create commit with pull request: {str(e)}"}
+
+@mcp.tool()
+def hf_list_pull_requests(
+    repo_id: str,
+    repo_type: str = "model",
+    status: str = "open",
+    author: Optional[str] = None
+) -> Dict[str, Any]:
+    """List pull requests in a repository
+    
+    Args:
+        repo_id: Repository ID (username/repo-name)
+        repo_type: Type of repository ("model", "dataset", "space")
+        status: Status filter ("open", "closed", "all")
+        author: Filter by author username
+    """
+    try:
+        # Map status parameter
+        discussion_status = None if status == "all" else status
+        
+        discussions = get_repo_discussions(
+            repo_id=repo_id,
+            repo_type=repo_type,
+            discussion_type="pull_request",
+            discussion_status=discussion_status,
+            author=author,
+            token=TOKEN
+        )
+        
+        prs = []
+        for discussion in discussions:
+            prs.append({
+                "number": discussion.num,
+                "title": discussion.title,
+                "author": discussion.author,
+                "status": discussion.status,
+                "created_at": discussion.created_at.isoformat() if discussion.created_at else None,
+                "url": discussion.url,
+                "is_pull_request": discussion.is_pull_request
+            })
+        
+        return {
+            "repo_id": repo_id,
+            "repo_type": repo_type,
+            "status_filter": status,
+            "author_filter": author,
+            "total_prs": len(prs),
+            "pull_requests": prs[:20]  # Limit to first 20 for readability
+        }
+    except Exception as e:
+        return {"error": f"Failed to list pull requests: {str(e)}"}
+
+@mcp.tool()
+def hf_get_pull_request_details(
+    repo_id: str,
+    pr_number: int,
+    repo_type: str = "model"
+) -> Dict[str, Any]:
+    """Get detailed information about a specific pull request
+    
+    Args:
+        repo_id: Repository ID (username/repo-name)
+        pr_number: Pull request number
+        repo_type: Type of repository ("model", "dataset", "space")
+    """
+    try:
+        discussion = get_discussion_details(
+            repo_id=repo_id,
+            discussion_num=pr_number,
+            repo_type=repo_type,
+            token=TOKEN
+        )
+        
+        # Extract events/comments
+        events = []
+        for event in discussion.events:
+            events.append({
+                "type": event.type,
+                "author": event.author,
+                "created_at": event.created_at.isoformat() if event.created_at else None,
+                "content": getattr(event, 'content', '') if hasattr(event, 'content') else ''
+            })
+        
+        return {
+            "repo_id": repo_id,
+            "pr_number": discussion.num,
+            "title": discussion.title,
+            "author": discussion.author,
+            "status": discussion.status,
+            "created_at": discussion.created_at.isoformat() if discussion.created_at else None,
+            "is_pull_request": discussion.is_pull_request,
+            "url": discussion.url,
+            "conflicting_files": discussion.conflicting_files,
+            "target_branch": discussion.target_branch,
+            "merge_commit_oid": discussion.merge_commit_oid,
+            "git_reference": getattr(discussion, 'git_reference', None),
+            "events": events,
+            "total_events": len(events)
+        }
+    except Exception as e:
+        return {"error": f"Failed to get pull request details: {str(e)}"}
+
+@mcp.tool()
+def hf_upload_file_pr(
+    repo_id: str,
+    file_path: str,
+    content: str,
+    commit_message: str,
+    pr_title: Optional[str] = None,
+    pr_description: Optional[str] = None,
+    repo_type: str = "model"
+) -> Dict[str, Any]:
+    """Upload a single file and create a pull request
+    
+    Args:
+        repo_id: Repository ID (username/repo-name)
+        file_path: Path where to save the file in the repo
+        content: File content
+        commit_message: Commit message
+        pr_title: Title for the pull request
+        pr_description: Description for the pull request
+        repo_type: Type of repository ("model", "dataset", "space")
+    """
+    if READ_ONLY:
+        return {"error": "❌ Read-only mode - cannot upload files or create pull requests"}
+    
+    if not TOKEN:
+        return {"error": "❌ Authentication required - set HF_TOKEN environment variable"}
+    
+    try:
+        # Upload file with create_pr=True
+        result = upload_file(
+            path_or_fileobj=content.encode('utf-8'),
+            path_in_repo=file_path,
+            repo_id=repo_id,
+            repo_type=repo_type,
+            commit_message=commit_message,
+            create_pr=True,
+            pr_title=pr_title or f"Add {file_path}",
+            pr_description=pr_description or f"Uploaded {file_path} via HuggingMCP",
+            token=TOKEN
+        )
+        
+        return {
+            "status": "success",
+            "message": f"📤 Uploaded {file_path} and created pull request",
+            "file_path": file_path,
+            "file_size": len(content.encode('utf-8')),
+            "commit_message": commit_message,
+            "pr_url": result if isinstance(result, str) else None,
+            "repo_id": repo_id,
+            "repo_type": repo_type
+        }
+    except Exception as e:
+        return {"error": f"Failed to upload file with pull request: {str(e)}"}
+
+# =============================================================================
 # SERVER STARTUP
 # =============================================================================
 
