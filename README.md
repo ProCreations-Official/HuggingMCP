@@ -12,6 +12,14 @@ HuggingMCP is a comprehensive Model Context Protocol (MCP) server that allows Cl
 - **Get detailed repository information** and metadata
 - **List repository files** and directory structures
 
+### 🔀 **Pull Requests & Collaboration**
+- **Create pull requests** on any public/private HuggingFace repository
+- **Upload files with PR** - make changes and create PRs in one step
+- **Commit with PR** - bundle multiple file changes into a single PR
+- **List pull requests** with filters (status, author, repo type)
+- **Get PR details** including comments, conflicts, and git references
+- **Draft mode support** - PRs start in draft for safe collaboration
+
 ### 📝 **Advanced File Operations**
 - **Read files** from any Hugging Face repository (public/private)
 - **Write/upload files** with custom content
