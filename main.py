@@ -25,7 +25,8 @@ try:
         HfApi, create_repo, upload_file, delete_repo, delete_file,
         list_models, list_datasets, list_spaces, model_info, dataset_info,
         hf_hub_download, login, logout, whoami, create_collection,
-        get_collection, add_collection_item
+        get_collection, add_collection_item, create_discussion,
+        get_repo_discussions, get_discussion_details
     )
 except ImportError:
     logger.error("huggingface_hub not installed. Run: pip3 install huggingface_hub")
