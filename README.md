@@ -346,4 +346,4 @@ MIT License - feel free to use, modify, and distribute!
 
 **Happy prompting with HuggingMCP!** 🤗✨
 
-*Now Claude can be your AI pair programmer for all things Hugging Face with 17 powerful tools!*
+*Now Claude can be your AI pair programmer for all things Hugging Face with 23 powerful tools including Pull Requests!*
