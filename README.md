@@ -145,6 +145,15 @@ Once connected, you can use natural language to interact with Hugging Face:
 "Find models tagged with 'pytorch' and 'transformer'"
 ```
 
+### 🔀 **Pull Request Operations**
+```
+"Create a pull request on microsoft/DialoGPT-medium to improve the model card"
+"Upload my new config.json file and create a pull request for review"
+"List all open pull requests on the huggingface/transformers repository"
+"Show me the details of pull request #42 including comments and conflicts"
+"Create a PR with multiple file changes: update README and add new training script"
+```
+
 ### 📚 Collections
 ```
 "Create a new collection called 'My Favorite Models'"
