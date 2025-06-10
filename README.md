@@ -1,99 +1,42 @@
-# 🤗 HuggingMCP - Hugging Face Model Context Protocol Server
+# HuggingMCP - Enhanced Hugging Face MCP Server
 
-**Give Claude superpowers with Hugging Face!** 🚀
+A comprehensive and optimized Model Context Protocol (MCP) server for Hugging Face Hub operations, featuring 10 consolidated commands, enhanced debugging, and robust error handling.
 
-HuggingMCP is a comprehensive Model Context Protocol (MCP) server that allows Claude and other MCP-compatible AI assistants to interact seamlessly with the Hugging Face ecosystem. Create models, manage datasets, edit files, organize collections, and much more - all through natural language!
+## 🚀 Features
 
-## ✨ Features
+- **Optimized Command Structure**: Consolidated from 23+ commands to 10 main commands
+- **Enhanced Debugging**: Comprehensive stderr output and logging for troubleshooting
+- **Robust Error Handling**: Safe execution wrappers and detailed error reporting
+- **Batch Operations**: Execute multiple operations efficiently
+- **Advanced Search**: Cross-content search with popularity scoring
+- **File Operations**: Read, write, edit, and delete files with chunked reading support
+- **Repository Management**: Create, delete, and manage repositories with creator tracking
+- **Pull Request Support**: Create and manage PRs with file changes
+- **Collection Management**: Create and manage Hugging Face collections
+- **Comprehensive Diagnostics**: System health checks and connectivity testing
 
-### 🏗️ **Repository Management**
-- **Create repositories** (models, datasets, spaces) with custom settings
-- **Delete repositories** (admin mode required)
-- **Get detailed repository information** and metadata
-- **List repository files** and directory structures
+## 📋 Prerequisites
 
-### 🔀 **Pull Requests & Collaboration**
-- **Create pull requests** on any public/private HuggingFace repository
-- **Upload files with PR** - make changes and create PRs in one step
-- **Commit with PR** - bundle multiple file changes into a single PR
-- **List pull requests** with filters (status, author, repo type)
-- **Get PR details** including comments, conflicts, and git references
-- **Draft mode support** - PRs start in draft for safe collaboration
+- Python 3.8+
+- Required packages:
+  ```bash
+  pip install mcp huggingface_hub
+  ```
+- Hugging Face token (set as `HF_TOKEN` environment variable)
 
-### 📝 **Advanced File Operations**
-- **Read files** from any Hugging Face repository (public/private)
-- **Write/upload files** with custom content
-- **Precise file editing** with exact text replacement (old_text → new_text)
-- **Delete files** from repositories
-- **Binary file support** for non-text files
+## ⚙️ Configuration
 
-### 🔍 **Search & Discovery**
-- **Search models** with filters (author, tags, popularity)
-- **Search datasets** across all of Hugging Face
-- **Search Spaces** and demo applications
-- **Advanced filtering** by downloads, likes, creation date
-- **Comprehensive metadata** for all results
+Add to your Claude Desktop configuration file at:
+`/Users/[username]/Library/Application Support/Claude/claude_desktop_config.json`
 
-### 📚 **Collections Management**
-- **Create collections** to organize repositories
-- **Add items** to collections (models, datasets, spaces, papers)
-- **Manage collection metadata** and descriptions
-- **Get collection information** and item lists
-
-### 🔒 **Security & Permissions**
-- **Token-based authentication** with Hugging Face
-- **Permission controls**: read-only, write-only, admin modes
-- **File size limits** to prevent abuse
-- **Comprehensive error handling**
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- **Python 3.10+** installed on your system
-- **Claude Desktop** application ([Download here](https://claude.ai/desktop))
-- **Hugging Face account** and access token ([Get token here](https://huggingface.co/settings/tokens))
-
-### Installation
-
-1. **Create a project directory:**
-```bash
-mkdir huggingmcp && cd huggingmcp
-```
-
-2. **Save the main.py file** from the artifact in your project directory
-
-3. **Install dependencies:**
-```bash
-# Install uv package manager (if not already installed)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Create virtual environment and install dependencies
-uv venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-uv add "mcp[cli]" huggingface_hub
-```
-
-### Configuration
-
-1. **Open Claude Desktop settings:**
-   - Go to Settings → Developer
-   - Click "Edit Config" to open `claude_desktop_config.json`
-
-2. **Add HuggingMCP configuration:**
 ```json
 {
   "mcpServers": {
     "huggingmcp": {
-      "command": "uv",
-      "args": [
-        "--directory",
-        "/ABSOLUTE/PATH/TO/YOUR/huggingmcp",
-        "run",
-        "main.py"
-      ],
+      "command": "python3",
+      "args": ["/Users/sshpro/Documents/hugmcp.py"],
       "env": {
-        "HF_TOKEN": "your-hf-token-here",
+        "HF_TOKEN": "your_hugging_face_token_here",
         "HF_ADMIN_MODE": "true",
         "HF_READ_ONLY": "false",
         "HF_WRITE_ONLY": "false",
@@ -103,247 +46,284 @@ uv add "mcp[cli]" huggingface_hub
   }
 }
 ```
-
-**Important:** Replace `/ABSOLUTE/PATH/TO/YOUR/huggingmcp` with the actual absolute path to your project directory.
-
-**Environment Variables:**
-- `HF_TOKEN`: Your Hugging Face access token (required)
-- `HF_READ_ONLY`: Set to "true" to allow only read operations (optional)
-- `HF_WRITE_ONLY`: Set to "true" to allow only write operations (optional)
-- `HF_ADMIN_MODE`: Set to "true" to enable repository deletion (optional)
-- `HF_MAX_FILE_SIZE`: Maximum file size in bytes (optional)
-
-3. **Restart Claude Desktop** to load the MCP server
-
-4. **Verify connection:** Look for the 🔨 hammer icon in Claude Desktop, indicating MCP tools are available.
-
-## 🎯 Usage Examples
-
-Once connected, you can use natural language to interact with Hugging Face:
-
-### 🏗️ Repository Operations
-```
-"Create a new model repository called 'my-awesome-model' with a custom README"
-"Show me information about the 'microsoft/DialoGPT-medium' model"
-"List all files in the 'squad' dataset repository"
-"Delete my test repository (admin mode required)"
-```
-
-### 📝 File Management
-```
-"Read the README.md file from 'gpt2' model repository"
-"Create a new config.json file in my model repo with these settings: {...}"
-"Edit the training script and replace 'learning_rate=0.001' with 'learning_rate=0.0001'"
-"Delete the old_model.bin file from my repository"
-```
-
-### 🔍 Search & Discovery
-```
-"Find the top 10 most downloaded text classification models"
-"Search for datasets related to sentiment analysis by huggingface"
-"Show me recent Gradio spaces for image generation"
-"Find models tagged with 'pytorch' and 'transformer'"
-```
-
-### 🔀 **Pull Request Operations**
-```
-"Create a pull request on microsoft/DialoGPT-medium to improve the model card"
-"Upload my new config.json file and create a pull request for review"
-"List all open pull requests on the huggingface/transformers repository"
-"Show me the details of pull request #42 including comments and conflicts"
-"Create a PR with multiple file changes: update README and add new training script"
-```
-
-### 📚 Collections
-```
-"Create a new collection called 'My Favorite Models'"
-"Add the 'bert-base-uncased' model to my collection with a note"
-"Show me all items in the 'best-nlp-models' collection"
-```
-
-## 🛡️ Security & Permissions
-
-HuggingMCP includes comprehensive permission controls:
-
-### Permission Modes
-
-| Mode | Description | Use Case |
-|------|-------------|----------|
-| **Default** | Full read/write access | Development and experimentation |
-| **Read Only** | Can only read repositories and files | Safe exploration mode |
-| **Write Only** | Can only create/modify (no deletion) | Content creation workflows |
-| **Admin Mode** | Full access including deletion | Advanced repository management |
-
-### Setting Permissions
-
-**Via Environment Variables:**
-```bash
-export HF_READ_ONLY=true   # Enable read-only mode
-export HF_WRITE_ONLY=true  # Enable write-only mode
-export HF_ADMIN_MODE=true  # Enable admin mode
-```
-
-**Via Claude Commands:**
-```
-"Set HuggingMCP to read-only mode"
-"Enable admin mode for repository deletion"
-"Show me my current permissions"
-```
-
-## 🧩 Available Tools
-
-HuggingMCP exposes the following tools to Claude:
-
-### Configuration & Testing
-- `hf_test` - Test server functionality and connection
-- `get_hf_config` - Get current configuration and capabilities
-- `hf_whoami` - Get current authenticated user info
-
-### Repository Management
-- `hf_create_repository` - Create new repos (models/datasets/spaces)
-- `hf_delete_repository` - Delete repos (admin mode required)
-- `hf_get_repository_info` - Get repo metadata and details
-- `hf_list_repository_files` - List all files in a repository
-
-### File Operations
-- `hf_read_file` - Read file content from repositories
-- `hf_write_file` - Write/upload files to repositories
-- `hf_edit_file` - Precise text replacement editing
-- `hf_delete_file` - Delete specific files from repositories
-
-### Search & Discovery
-- `hf_search_models` - Search Hugging Face models
-- `hf_search_datasets` - Search Hugging Face datasets  
-- `hf_search_spaces` - Search Hugging Face Spaces
-
-### Pull Requests & Collaboration
-- `hf_create_pull_request` - Create pull requests on repositories
-- `hf_create_commit_pr` - Create commits with multiple files as PR
-- `hf_upload_file_pr` - Upload single file and create PR  
-- `hf_list_pull_requests` - List PRs with filtering options
-- `hf_get_pull_request_details` - Get detailed PR information
-
-### Collections
-- `hf_collection_create` - Create new collections
-- `hf_collection_add` - Add items to collections
-- `hf_collection_info` - Get collection details and items
-
-## 🔧 Configuration Options
 
 ### Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `HF_TOKEN` | None | Your Hugging Face access token (required) |
-| `HF_READ_ONLY` | false | Enable read-only mode |
-| `HF_WRITE_ONLY` | false | Enable write-only mode |
-| `HF_ADMIN_MODE` | false | Enable admin operations (repository deletion) |
-| `HF_MAX_FILE_SIZE` | 100000000 | Maximum file size in bytes (100MB default) |
+- `HF_TOKEN`: Your Hugging Face API token (required for write operations)
+- `HF_ADMIN_MODE`: Enable admin operations like repository deletion (default: false)
+- `HF_READ_ONLY`: Restrict to read-only operations (default: false)
+- `HF_MAX_FILE_SIZE`: Maximum file size for operations (default: 100MB)
 
-### Claude Desktop Config
+## 🛠️ Available Commands
 
-**Basic Configuration:**
-```json
-{
-  "mcpServers": {
-    "huggingmcp": {
-      "command": "python",
-      "args": ["/path/to/main.py"],
-      "env": {
-        "HF_TOKEN": "your-hf-token-here"
-      }
-    }
-  }
-}
+### 1. `hf_system_info()`
+Get system information, configuration, and test connectivity.
+```python
+# Returns server status, configuration, user info, and capabilities
 ```
 
-**Advanced Configuration:**
-```json
-{
-  "mcpServers": {
-    "huggingmcp": {
-      "command": "uv",
-      "args": [
-        "--directory", "/path/to/huggingmcp",
-        "run", "main.py"
-      ],
-      "env": {
-        "HF_TOKEN": "your-hf-token-here",
-        "HF_ADMIN_MODE": "true",
-        "HF_READ_ONLY": "false",
-        "HF_WRITE_ONLY": "false",
-        "HF_MAX_FILE_SIZE": "100000000"
-      }
-    }
-  }
-}
+### 2. `hf_repository_manager(action, repo_id, repo_type="model", **kwargs)`
+Comprehensive repository management.
+
+**Actions:**
+- `create`: Create new repository
+  - `private`: Make repository private (default: False)
+  - `description`: Repository description
+  - `space_sdk`: For Spaces - "gradio", "streamlit", "docker", "static"
+  - `creator`: Repository creator (defaults to authenticated user)
+- `delete`: Delete repository (requires admin mode)
+- `info`: Get repository information
+- `list_files`: List all files in repository
+
+**Examples:**
+```python
+# Create a public model repository
+hf_repository_manager("create", "my-awesome-model", "model", 
+                     description="My awesome AI model")
+
+# Create a private Gradio space
+hf_repository_manager("create", "my-space", "space", 
+                     private=True, space_sdk="gradio")
+
+# Get repository info
+hf_repository_manager("info", "microsoft/DialoGPT-medium")
+
+# List files in repository
+hf_repository_manager("list_files", "gpt2")
 ```
+
+### 3. `hf_file_operations(action, repo_id, filename, repo_type="model", **kwargs)`
+Comprehensive file operations.
+
+**Actions:**
+- `read`: Read file content
+  - `max_size`: Maximum characters to read (default: 500,000)
+  - `chunk_size`: Enable chunked reading
+  - `chunk_number`: Chunk number to read (for chunked reading)
+- `write`: Write/upload file content
+  - `content`: File content to write
+  - `commit_message`: Commit message
+- `edit`: Edit file by replacing text
+  - `old_text`: Text to replace
+  - `new_text`: Replacement text
+  - `commit_message`: Commit message
+- `delete`: Delete file from repository
+
+**Examples:**
+```python
+# Read a file (truncated to 1000 chars)
+hf_file_operations("read", "gpt2", "README.md", max_size=1000)
+
+# Read file in chunks
+hf_file_operations("read", "gpt2", "config.json", chunk_size=1000, chunk_number=0)
+
+# Write a new file
+hf_file_operations("write", "my-repo", "new_file.txt", 
+                  content="Hello World!", 
+                  commit_message="Add new file")
+
+# Edit existing file
+hf_file_operations("edit", "my-repo", "README.md",
+                  old_text="# Old Title",
+                  new_text="# New Title",
+                  commit_message="Update title")
+```
+
+### 4. `hf_search_hub(content_type, query=None, author=None, filter_tag=None, limit=20)`
+Search Hugging Face Hub for models, datasets, or spaces.
+
+**Examples:**
+```python
+# Search for transformer models
+hf_search_hub("models", query="transformer", limit=10)
+
+# Search for datasets by specific author
+hf_search_hub("datasets", author="huggingface", limit=5)
+
+# Search for Gradio spaces
+hf_search_hub("spaces", filter_tag="gradio")
+```
+
+### 5. `hf_collections(action, **kwargs)`
+Manage Hugging Face Collections.
+
+**Actions:**
+- `create`: Create new collection
+  - `title`: Collection title (required)
+  - `namespace`: Collection namespace (defaults to user)
+  - `description`: Collection description
+  - `private`: Make collection private
+- `add_item`: Add item to collection
+  - `collection_slug`: Collection identifier
+  - `item_id`: Item to add (repo ID)
+  - `item_type`: Type of item ("model", "dataset", "space")
+  - `note`: Optional note about the item
+- `info`: Get collection information
+  - `collection_slug`: Collection identifier
+
+**Examples:**
+```python
+# Create a new collection
+hf_collections("create", title="My AI Models", 
+               description="Collection of my favorite models")
+
+# Add item to collection
+hf_collections("add_item", 
+               collection_slug="my-collection",
+               item_id="gpt2", 
+               item_type="model",
+               note="Great base model")
+```
+
+### 6. `hf_pull_requests(action, repo_id, repo_type="model", **kwargs)`
+Manage Pull Requests.
+
+**Actions:**
+- `create`: Create empty PR
+  - `title`: PR title (required, min 3 characters)
+  - `description`: PR description
+- `list`: List PRs
+  - `status`: Filter by status ("open", "closed", "all")
+  - `author`: Filter by author
+- `details`: Get PR details
+  - `pr_number`: PR number to get details for
+- `create_with_files`: Create PR with file changes
+  - `files`: List of {path, content} dictionaries
+  - `commit_message`: Commit message
+  - `pr_title`: PR title
+  - `pr_description`: PR description
+
+**Examples:**
+```python
+# Create a simple PR
+hf_pull_requests("create", "my-repo", title="Update documentation")
+
+# Create PR with file changes
+hf_pull_requests("create_with_files", "my-repo",
+                 files=[{"path": "README.md", "content": "Updated content"}],
+                 commit_message="Update README",
+                 pr_title="Documentation update")
+
+# List open PRs
+hf_pull_requests("list", "my-repo", status="open")
+```
+
+### 7. `hf_upload_manager(action, repo_id, repo_type="model", **kwargs)`
+Upload management with various options.
+
+**Actions:**
+- `single_file`: Upload one file
+  - `file_path`: Path in repository
+  - `content`: File content
+  - `commit_message`: Commit message
+- `multiple_files`: Upload multiple files
+  - `files`: List of {path, content} dictionaries
+  - `commit_message`: Commit message
+- `with_pr`: Upload file(s) and create PR
+  - `file_path`: Path in repository
+  - `content`: File content
+  - `commit_message`: Commit message
+  - `pr_title`: PR title
+  - `pr_description`: PR description
+
+### 8. `hf_batch_operations(operation_type, operations)`
+Execute multiple operations in batch.
+
+**Operation Types:**
+- `search`: Batch search operations
+- `info`: Batch repository info retrieval
+- `files`: Batch file listing
+
+**Example:**
+```python
+# Batch search multiple content types
+hf_batch_operations("search", [
+    {"content_type": "models", "query": "transformer", "limit": 5},
+    {"content_type": "datasets", "query": "text", "limit": 3}
+])
+```
+
+### 9. `hf_advanced_search(query, search_types=["models", "datasets", "spaces"], filters=None, limit_per_type=10)`
+Advanced search across multiple content types with filtering and popularity scoring.
+
+**Example:**
+```python
+# Advanced search with filtering
+hf_advanced_search("transformer", 
+                   search_types=["models", "datasets"],
+                   filters={"author": "huggingface"},
+                   limit_per_type=15)
+```
+
+### 10. `hf_debug_diagnostics()`
+Comprehensive debugging and diagnostic information.
+```python
+# Get system diagnostics, connectivity tests, and debug info
+```
+
+## 🔧 Debugging
+
+The server includes comprehensive debugging features:
+
+- **Stderr Output**: Real-time debugging information printed to stderr
+- **Log Files**: Detailed logs written to `/tmp/hugmcp_debug.log`
+- **Diagnostic Tools**: Use `hf_debug_diagnostics()` for system health checks
+- **Error Tracking**: Comprehensive error handling with stack traces
+
+### Debug Log Locations
+- MCP Logs: `/Users/[username]/Library/Logs/Claude/mcp-server-huggingmcp.log`
+- Debug Logs: `/tmp/hugmcp_debug.log`
+
+## 🛡️ Security & Permissions
+
+- **Authentication**: Requires HF_TOKEN for write operations
+- **Read-Only Mode**: Set `HF_READ_ONLY=true` to prevent modifications
+- **Admin Mode**: Set `HF_ADMIN_MODE=true` to enable repository deletion
+- **File Size Limits**: Configurable via `HF_MAX_FILE_SIZE`
 
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
-**1. "Connection failed" in Claude Desktop**
-- Verify the absolute path in your config is correct
-- Check that `main.py` exists in the specified directory
-- Ensure Python/uv is accessible from the command line
+1. **Server Disconnects Immediately**
+   - Check if the script path in configuration is correct
+   - Verify Python dependencies are installed
+   - Check debug logs for detailed error information
 
-**2. "Authentication required" errors**
-- Verify your HF_TOKEN is valid at https://huggingface.co/settings/tokens
-- Ensure the token has appropriate permissions (read/write)
-- Check that the token is correctly set in the Claude Desktop config env section
-- Test with "Who am I currently logged in as?" to verify authentication
+2. **Authentication Errors**
+   - Ensure `HF_TOKEN` is set correctly
+   - Verify token has required permissions
+   - Check token validity at huggingface.co
 
-**3. "Permission denied" errors**
-- Check your permission settings with `get_hf_config`
-- Verify you're not in read-only mode for write operations
-- Ensure admin mode is enabled for deletion operations
+3. **File Path Errors**
+   - Verify the script is at `/Users/sshpro/Documents/hugmcp.py`
+   - Check file permissions (should be readable/executable)
 
-**4. General debugging tips**
-- Check the file exists and you have permissions to access it
-- Verify the repository name and file path are correct
-- Ensure you're not in read-only mode for write operations
-
-### Debug Logs
-
-Check Claude Desktop MCP logs:
-- **macOS:** `~/Library/Logs/Claude/mcp.log`
-- **Windows:** `%APPDATA%/Claude/Logs/mcp.log`
-
-Enable verbose logging in main.py:
-```python
-logging.basicConfig(level=logging.DEBUG)
-```
+4. **Import Errors**
+   - Install required packages: `pip install mcp huggingface_hub`
+   - Check Python version compatibility
 
 ### Getting Help
 
-1. **Check the logs** in Claude Desktop's MCP log files
-2. **Verify configuration** using the `get_hf_config` tool
-3. **Test authentication** with `hf_whoami`
-4. **Test basic functionality** with `hf_test`
-5. **Start simple** with read operations before trying writes
+1. Use `hf_debug_diagnostics()` for system information
+2. Check stderr output for real-time debugging
+3. Review log files for detailed error traces
+4. Verify configuration in Claude Desktop settings
 
-## 🤝 Contributing
+## 📝 Version History
 
-Found a bug or want to add a feature? Here's how you can help:
-
-1. **Report Issues:** Open an issue describing the problem
-2. **Feature Requests:** Suggest new Hugging Face integrations
-3. **Code Contributions:** Submit pull requests with improvements
-4. **Documentation:** Help improve these docs!
+### v2.0.0 (Current)
+- Consolidated 23+ commands into 10 optimized commands
+- Enhanced debugging and error handling
+- Added batch operations and advanced search
+- Improved file operations with chunked reading
+- Added comprehensive diagnostics
+- Fixed metadata and connection stability issues
 
 ## 📄 License
 
-MIT License - feel free to use, modify, and distribute!
+This project is licensed under the MIT License.
 
-## 🙏 Acknowledgments
+## 🤝 Contributing
 
-- **Anthropic** for creating the Model Context Protocol
-- **Hugging Face** for their amazing platform and APIs
-- **FastMCP** team for the excellent Python SDK
-
----
-
-**Happy prompting with HuggingMCP!** 🤗✨
-
-*Now Claude can be your AI pair programmer for all things Hugging Face with 23 powerful tools including Pull Requests!*
+Contributions are welcome! Please ensure all changes maintain the current command structure and include appropriate error handling and debugging output.
