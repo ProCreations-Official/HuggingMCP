@@ -1,10 +1,10 @@
 # HuggingMCP - Enhanced Hugging Face MCP Server
 
-A comprehensive and optimized Model Context Protocol (MCP) server for Hugging Face Hub operations, featuring 10 consolidated commands, enhanced debugging, and robust error handling.
+A comprehensive and optimized Model Context Protocol (MCP) server for Hugging Face Hub operations, featuring 11 consolidated commands, enhanced debugging, and robust error handling.
 
 ## 🚀 Features
 
-- **Optimized Command Structure**: Consolidated from 23+ commands to 10 main commands
+- **Optimized Command Structure**: Consolidated from 23+ commands to 11 main commands
 - **Enhanced Debugging**: Comprehensive stderr output and logging for troubleshooting
 - **Robust Error Handling**: Safe execution wrappers and detailed error reporting
 - **Batch Operations**: Execute multiple operations efficiently
@@ -261,6 +261,20 @@ Comprehensive debugging and diagnostic information.
 # Get system diagnostics, connectivity tests, and debug info
 ```
 
+### 11. `hf_repo_file_manager(action, repo_id, repo_type="model", filename=None, **kwargs)`
+Unified repository and file management with rename support.
+
+**Actions:**
+- `repo_create`, `repo_delete`, `repo_info`, `list_files`
+- `file_read`, `file_write`, `file_edit`, `file_delete`, `file_rename`
+
+**Example:**
+```python
+# Rename a file in a repository
+hf_repo_file_manager("file_rename", "my-repo", filename="old.txt",
+                     new_filename="new.txt", commit_message="Rename file")
+```
+
 ## 🔧 Debugging
 
 The server includes comprehensive debugging features:
@@ -312,8 +326,9 @@ The server includes comprehensive debugging features:
 
 ## 📝 Version History
 
-### v2.0.0 (Current)
-- Consolidated 23+ commands into 10 optimized commands
+### v2.1.0 (Current)
+- Consolidated 23+ commands into 11 optimized commands
+- Added unified repo/file manager with rename support
 - Enhanced debugging and error handling
 - Added batch operations and advanced search
 - Improved file operations with chunked reading
