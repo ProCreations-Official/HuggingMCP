@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 HuggingMCP - Enhanced Hugging Face MCP Server
-Optimized with 10 main commands and enhanced debugging
+Optimized with 11 main commands and enhanced debugging
 """
 
 import os
@@ -50,7 +50,7 @@ try:
         list_models, list_datasets, list_spaces, model_info, dataset_info,
         hf_hub_download, login, logout, whoami, create_collection,
         get_collection, add_collection_item, create_discussion,
-        get_repo_discussions, get_discussion_details, CommitOperationAdd
+        get_repo_discussions, get_discussion_details, CommitOperationAdd, CommitOperationDelete
     )
     debug_stderr("✅ Hugging Face Hub imported successfully")
 except ImportError as e:
@@ -62,7 +62,7 @@ except ImportError as e:
 try:
     mcp = FastMCP(
         "HuggingMCP",
-        description="Enhanced Hugging Face MCP Server with 10 optimized commands"
+        description="Enhanced Hugging Face MCP Server with 11 optimized commands"
     )
     debug_stderr("✅ FastMCP server initialized")
 except Exception as e:
@@ -1028,6 +1028,67 @@ def hf_upload_manager(
     return safe_execute(_manage_uploads, f"upload_{action}")
 
 @mcp.tool()
+def hf_repo_file_manager(
+    action: str,
+    repo_id: str,
+    repo_type: str = "model",
+    filename: Optional[str] = None,
+    **kwargs
+) -> Dict[str, Any]:
+    """Unified repository and file management with rename support"""
+
+    def _repo_file():
+        if action.startswith("repo_"):
+            return hf_repository_manager(action.replace("repo_", ""), repo_id, repo_type, **kwargs)
+
+        if action.startswith("file_"):
+            file_action = action.replace("file_", "")
+            if file_action == "rename":
+                auth_error = validate_auth("file rename")
+                if auth_error:
+                    return auth_error
+
+                perm_error = validate_permissions(require_write=True)
+                if perm_error:
+                    return perm_error
+
+                new_filename = kwargs.get("new_filename")
+                if not filename or not new_filename:
+                    return {"error": "❌ filename and new_filename required"}
+
+                file_path = hf_hub_download(repo_id=repo_id, filename=filename, repo_type=repo_type, token=TOKEN)
+                with open(file_path, "rb") as f:
+                    content = f.read()
+
+                operations = [
+                    CommitOperationAdd(path_in_repo=new_filename, path_or_fileobj=content),
+                    CommitOperationDelete(path_in_repo=filename),
+                ]
+
+                commit_result = api.create_commit(
+                    repo_id=repo_id,
+                    operations=operations,
+                    commit_message=kwargs.get("commit_message", f"Rename {filename} to {new_filename}"),
+                    repo_type=repo_type,
+                    token=TOKEN,
+                )
+
+                return {
+                    "status": "success",
+                    "message": f"🔄 Renamed {filename} to {new_filename}",
+                    "commit_url": commit_result.commit_url,
+                    "repo_id": repo_id,
+                    "old_filename": filename,
+                    "new_filename": new_filename,
+                }
+
+            return hf_file_operations(file_action, repo_id, filename, repo_type, **kwargs)
+
+        return {"error": f"❌ Unknown action: {action}"}
+
+    return safe_execute(_repo_file, f"repo_file_{action}")
+
+@mcp.tool()
 def hf_batch_operations(
     operation_type: str,
     operations: List[Dict[str, Any]]
@@ -1270,7 +1331,7 @@ def main():
         debug_stderr(f"   🔑 Authenticated: {'✅' if TOKEN else '❌'}")
         debug_stderr(f"   🔒 Admin Mode: {'✅' if ADMIN_MODE else '❌'}")
         debug_stderr(f"   📚 Read Only: {'✅' if READ_ONLY else '❌'}")
-        debug_stderr(f"   🛠️ Commands: 10 optimized tools available")
+        debug_stderr(f"   🛠️ Commands: 11 optimized tools available")
         
         # Validate critical components
         if not hasattr(mcp, 'run'):
