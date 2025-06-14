@@ -10,3 +10,13 @@ huggingface_hub>=0.26.0
 # Additional utilities (optional but recommended)
 python-dotenv>=1.0.0  # For .env file support
 aiofiles>=23.0.0      # For async file operations
+
+# Enhanced functionality (optional)
+psutil>=5.9.0         # For system monitoring in diagnostics
+requests>=2.28.0      # For API calls
+typing-extensions>=4.0.0  # For enhanced type hints
+
+# Development and testing (optional)
+pytest>=7.0.0         # For testing
+black>=22.0.0         # For code formatting
+flake8>=5.0.0         # For linting

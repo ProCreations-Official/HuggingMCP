@@ -1,19 +1,31 @@
-# HuggingMCP - Enhanced Hugging Face MCP Server
+# HuggingMCP - Advanced Hugging Face MCP Server
 
-A comprehensive and optimized Model Context Protocol (MCP) server for Hugging Face Hub operations, featuring 11 consolidated commands, enhanced debugging, and robust error handling.
+A comprehensive and powerful Model Context Protocol (MCP) server for Hugging Face Hub operations, featuring 18+ specialized tools, AI workflow automation, and extensive ML capabilities.
 
 ## 🚀 Features
 
-- **Optimized Command Structure**: Consolidated from 23+ commands to 11 main commands
+### Core Capabilities
+- **Optimized Command Structure**: 18+ specialized commands covering all aspects of ML workflows
 - **Enhanced Debugging**: Comprehensive stderr output and logging for troubleshooting
-- **Robust Error Handling**: Safe execution wrappers and detailed error reporting
-- **Batch Operations**: Execute multiple operations efficiently
-- **Advanced Search**: Cross-content search with popularity scoring
-- **File Operations**: Read, write, edit, and delete files with chunked reading support
-- **Repository Management**: Create, delete, and manage repositories with creator tracking
-- **Pull Request Support**: Create and manage PRs with file changes
-- **Collection Management**: Create and manage Hugging Face collections
-- **Comprehensive Diagnostics**: System health checks and connectivity testing
+- **Robust Error Handling**: Safe execution wrappers with detailed error reporting and helpful guidance
+- **Backward Compatibility**: All existing commands maintained with enhanced functionality
+
+### New Advanced Features
+- **🔬 Model Evaluation & Testing**: Comprehensive model analysis, validation, and comparison tools
+- **🗃️ Dataset Processing**: Advanced dataset analysis, validation, and management
+- **📝 License Management**: Automated license checking, compliance validation, and suggestions
+- **🤝 Community Features**: Repository likes, discussions, commit history, and social interactions
+- **🚀 Space Management**: Complete Hugging Face Spaces control and monitoring
+- **🧠 AI Inference Tools**: Model testing and inference capabilities with multiple strategies
+- **⚙️ Workflow Automation**: Automated model card generation, README creation, and bulk operations
+- **📊 Advanced Analytics**: Trending analysis, recommendation engine, and ecosystem insights
+- **🛠️ Repository Utilities**: Health checks, backup tools, and comprehensive repository management
+
+### Enhanced File Operations
+- **Batch Processing**: Edit multiple files with pattern matching
+- **File Validation**: Format-specific validation for JSON, Markdown, Python, etc.
+- **Backup System**: Automatic backup creation before destructive operations
+- **Advanced Reading**: Chunked reading, encoding detection, and size management
 
 ## 📋 Prerequisites
 
@@ -52,14 +64,19 @@ Add to your Claude Desktop configuration file at:
 - `HF_TOKEN`: Your Hugging Face API token (required for write operations)
 - `HF_ADMIN_MODE`: Enable admin operations like repository deletion (default: false)
 - `HF_READ_ONLY`: Restrict to read-only operations (default: false)
-- `HF_MAX_FILE_SIZE`: Maximum file size for operations (default: 100MB)
+- `HF_MAX_FILE_SIZE`: Maximum file size for operations in bytes (default: 104857600 = 100MB)
+- `HF_ENABLE_INFERENCE`: Enable inference API features (default: true)
+- `HF_INFERENCE_TIMEOUT`: Timeout for inference operations in seconds (default: 30)
+- `HF_CACHE_ENABLED`: Enable caching for better performance (default: true)
 
 ## 🛠️ Available Commands
 
+### Core Commands (Enhanced)
+
 ### 1. `hf_system_info()`
-Get system information, configuration, and test connectivity.
+Get comprehensive system information, configuration, and test connectivity.
 ```python
-# Returns server status, configuration, user info, and capabilities
+# Returns server status, configuration, user info, capabilities, and new features
 ```
 
 ### 2. `hf_repository_manager(action, repo_id, repo_type="model", **kwargs)`
@@ -93,21 +110,27 @@ hf_repository_manager("list_files", "gpt2")
 ```
 
 ### 3. `hf_file_operations(action, repo_id, filename, repo_type="model", **kwargs)`
-Comprehensive file operations.
+Enhanced file operations with advanced capabilities.
 
 **Actions:**
-- `read`: Read file content
+- `read`: Read file content with encoding detection
   - `max_size`: Maximum characters to read (default: 500,000)
   - `chunk_size`: Enable chunked reading
   - `chunk_number`: Chunk number to read (for chunked reading)
-- `write`: Write/upload file content
+- `write`: Write/upload file content with validation
   - `content`: File content to write
   - `commit_message`: Commit message
-- `edit`: Edit file by replacing text
+- `edit`: Edit file by replacing text with backup
   - `old_text`: Text to replace
   - `new_text`: Replacement text
   - `commit_message`: Commit message
 - `delete`: Delete file from repository
+- `validate`: Validate file format and content
+- `backup`: Create backup of file before operations
+- `batch_edit`: Edit multiple files with pattern matching
+  - `pattern`: Text pattern to replace
+  - `replacement`: Replacement text
+  - `file_patterns`: File patterns to match (e.g., ["*.md", "*.txt"])
 
 **Examples:**
 ```python
@@ -275,6 +298,193 @@ hf_repo_file_manager("file_rename", "my-repo", filename="old.txt",
                      new_filename="new.txt", commit_message="Rename file")
 ```
 
+### New Advanced Commands
+
+### 12. `hf_model_evaluation(action, repo_id, **kwargs)`
+Advanced model evaluation and testing capabilities.
+
+**Actions:**
+- `analyze`: Comprehensive model analysis including architecture, frameworks, and compatibility
+- `compare`: Compare multiple models side by side
+- `test_inference`: Test model inference capabilities (if supported)
+- `validate_model`: Validate model integrity and completeness
+
+**Examples:**
+```python
+# Analyze a model
+hf_model_evaluation("analyze", "microsoft/DialoGPT-medium")
+
+# Compare multiple models
+hf_model_evaluation("compare", "gpt2", models=["gpt2", "distilgpt2", "microsoft/DialoGPT-medium"])
+
+# Validate model
+hf_model_evaluation("validate_model", "my-model")
+```
+
+### 13. `hf_space_management(action, space_id, **kwargs)`
+Advanced Hugging Face Spaces management.
+
+**Actions:**
+- `runtime_info`: Get space runtime information and status
+- `restart`: Restart a space
+- `pause`: Pause a space
+- `set_sleep_time`: Set sleep time for a space
+- `duplicate`: Duplicate a space to a new location
+
+**Examples:**
+```python
+# Get space runtime info
+hf_space_management("runtime_info", "gradio/chatbot")
+
+# Restart a space
+hf_space_management("restart", "my-space")
+
+# Duplicate a space
+hf_space_management("duplicate", "original-space", to_id="my-copied-space")
+```
+
+### 14. `hf_community_features(action, repo_id, repo_type="model", **kwargs)`
+Community features and social interactions.
+
+**Actions:**
+- `like`: Like a repository
+- `unlike`: Unlike a repository
+- `get_likes`: Get user's liked repositories
+- `create_discussion`: Create a discussion (non-PR)
+- `get_commits`: Get repository commit history
+- `get_refs`: Get repository branches and tags
+
+**Examples:**
+```python
+# Like a repository
+hf_community_features("like", "microsoft/DialoGPT-medium")
+
+# Get commit history
+hf_community_features("get_commits", "my-repo")
+
+# Create a discussion
+hf_community_features("create_discussion", "my-repo", 
+                      title="Question about model", 
+                      description="How do I use this model?")
+```
+
+### 15. `hf_dataset_processing(action, dataset_id, **kwargs)`
+Advanced dataset processing and analysis tools.
+
+**Actions:**
+- `analyze`: Analyze dataset structure, size, and metadata
+- `compare`: Compare multiple datasets
+- `validate`: Validate dataset format and completeness
+
+**Examples:**
+```python
+# Analyze a dataset
+hf_dataset_processing("analyze", "squad")
+
+# Compare datasets
+hf_dataset_processing("compare", "squad", datasets=["squad", "glue", "imdb"])
+
+# Validate dataset
+hf_dataset_processing("validate", "my-dataset")
+```
+
+### 16. `hf_license_management(action, repo_id, repo_type="model", **kwargs)`
+License management and compliance tools.
+
+**Actions:**
+- `check_license`: Check repository license information
+- `validate_compliance`: Validate license compliance with scoring
+- `suggest_license`: Suggest appropriate license based on content type and preferences
+
+**Examples:**
+```python
+# Check license
+hf_license_management("check_license", "my-model")
+
+# Validate compliance
+hf_license_management("validate_compliance", "my-model")
+
+# Get license suggestions
+hf_license_management("suggest_license", "my-model", 
+                     content_type="model", commercial_use=True)
+```
+
+### 17. `hf_inference_tools(action, repo_id, **kwargs)`
+Advanced inference and model testing tools.
+
+**Actions:**
+- `test_inference`: Test model inference with custom inputs
+- `check_endpoints`: Check available inference endpoints
+
+**Examples:**
+```python
+# Test inference
+hf_inference_tools("test_inference", "gpt2", 
+                  inputs=["Hello world", "How are you?"],
+                  parameters={"max_length": 50})
+
+# Check endpoints
+hf_inference_tools("check_endpoints", "my-model")
+```
+
+### 18. `hf_ai_workflow_tools(action, **kwargs)`
+Specialized AI workflow and automation tools.
+
+**Actions:**
+- `create_model_card`: Generate comprehensive model cards
+- `bulk_operations`: Perform bulk operations across repositories
+- `generate_readme`: Generate README files for repositories
+- `validate_pipeline`: Validate complete ML pipelines
+
+**Examples:**
+```python
+# Generate model card
+hf_ai_workflow_tools("create_model_card", repo_id="my-model",
+                    model_type="text-generation", language=["en"])
+
+# Bulk operations
+hf_ai_workflow_tools("bulk_operations", 
+                    repo_list=["model1", "model2"], 
+                    operation="validate")
+
+# Generate README
+hf_ai_workflow_tools("generate_readme", repo_id="my-model", repo_type="model")
+```
+
+### 19. `hf_advanced_analytics(action, **kwargs)`
+Advanced analytics and insights for HuggingFace repositories.
+
+**Actions:**
+- `trending_analysis`: Analyze trending models/datasets with metrics
+- `recommendation_engine`: Recommend repositories based on preferences
+
+**Examples:**
+```python
+# Trending analysis
+hf_advanced_analytics("trending_analysis", content_type="models", limit=50)
+
+# Get recommendations
+hf_advanced_analytics("recommendation_engine", 
+                     content_type="models",
+                     preferences={"tags": ["transformers", "pytorch"], "min_downloads": 1000})
+```
+
+### 20. `hf_repository_utilities(action, repo_id, repo_type="model", **kwargs)`
+Advanced repository utilities and management tools.
+
+**Actions:**
+- `repository_health`: Comprehensive repository health check with scoring
+- `backup_info`: Create comprehensive backup information
+
+**Examples:**
+```python
+# Health check
+hf_repository_utilities("repository_health", "my-model")
+
+# Create backup info
+hf_repository_utilities("backup_info", "my-model")
+```
+
 ## 🔧 Debugging
 
 The server includes comprehensive debugging features:
@@ -326,7 +536,23 @@ The server includes comprehensive debugging features:
 
 ## 📝 Version History
 
-### v2.1.0 (Current)
+### v3.0.0 (Current) - Major Feature Release
+- **Massive expansion**: Added 9+ new advanced command categories (18+ total tools)
+- **🔬 Model Evaluation**: Complete model analysis, comparison, and validation system
+- **🗃️ Dataset Processing**: Advanced dataset analysis and validation tools
+- **📝 License Management**: Automated license checking and compliance validation
+- **🤝 Community Features**: Repository likes, discussions, commit history, social interactions
+- **🚀 Space Management**: Complete Hugging Face Spaces control and monitoring
+- **🧠 AI Inference Tools**: Model testing and inference capabilities
+- **⚙️ Workflow Automation**: Model card generation, README creation, bulk operations
+- **📊 Advanced Analytics**: Trending analysis, recommendation engine, ecosystem insights
+- **🛠️ Repository Utilities**: Health checks, backup tools, comprehensive management
+- **Enhanced File Operations**: Batch editing, validation, backup system, format detection
+- **Improved Error Handling**: Detailed validation, helpful error messages, guided troubleshooting
+- **Graceful Degradation**: Feature detection for different huggingface_hub versions
+- **Backward Compatibility**: All existing v2.x commands maintained and enhanced
+
+### v2.1.0
 - Consolidated 23+ commands into 11 optimized commands
 - Added unified repo/file manager with rename support
 - Enhanced debugging and error handling
